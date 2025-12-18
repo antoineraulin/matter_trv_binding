@@ -1,4 +1,6 @@
-:author: Antoine Raulin
+= Matter TRV Binding & Monitoring Scripts
+:toc:
+:toc-title: Table of Contents
 
 ifdef::env-github[]
 ++++
@@ -24,13 +26,6 @@ ifdef::env-gitlab[]
 <br>
 ++++
 endif::[]
-
-
-= Matter TRV Binding & Monitoring Scripts
-:toc: macro
-:toc-title: Table of Contents
-:idprefix:
-:idseparator: -
 
 This repository contains Python scripts to enable and monitor **direct Matter bindings** between temperature sensors and Matter-enabled Thermostatic Radiator Valves (TRVs).
 
