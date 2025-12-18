@@ -1,0 +1,42 @@
+alias: TRV Binding - Auto Repair
+description: Automatically repair TRVs that lost remote sensing
+triggers:
+  - event_type: trv_binding_repair_requested
+    trigger: event
+actions:
+  - data:
+      name: TRV Binding Monitor
+      message: Starting auto-repair process...
+    action: logbook.log
+  - action: shell_command.repair_trv_bindings
+  - delay:
+      minutes: 1
+  - target:
+      entity_id:
+        - sensor.trv_binding_status_raw
+        - sensor.trv_binding_check_time
+        - sensor.trv_total_count
+        - sensor.trv_healthy_count
+        - sensor.trv_unhealthy_count
+        - sensor.trv_repaired_count
+    action: homeassistant.update_entity
+  - delay:
+      seconds: 2
+  - data:
+      title: TRV Auto-Repair Complete
+      message: >
+        ✅ Repair complete: - Repaired: {{ states('sensor.trv_repaired_count') }}
+        TRV(s) - Healthy: {{ states('sensor.trv_healthy_count') }}/{{
+        states('sensor.trv_total_count') }} - Still unhealthy: {{
+        states('sensor.trv_unhealthy_count') }}
+
+        Last check: {{ states('sensor.trv_binding_check_time') }}
+    action: notify.persistent_notification
+  - delay:
+      seconds: 30
+  - target:
+      entity_id: automation.trv_binding_periodic_check
+    data:
+      skip_condition: true
+    action: automation.trigger
+mode: single

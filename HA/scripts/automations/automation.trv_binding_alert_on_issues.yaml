@@ -1,0 +1,40 @@
+alias: TRV Binding - Alert on Issues
+description: Send notification when TRVs lose remote sensing
+triggers:
+  - entity_id: binary_sensor.trv_bindings_problem
+    to: "on"
+    for:
+      minutes: 5
+    trigger: state
+conditions:
+  - condition: template
+    value_template: "{{ states('sensor.trv_unhealthy_count') | int > 0 }}"
+actions:
+  - data:
+      title: TRV Remote Sensing Issue
+      message: >
+        ⚠️ {{ states('sensor.trv_unhealthy_count') }} out of {{
+        states('sensor.trv_total_count') }} TRV(s) lost remote temperature
+        sensing.
+
+        This may happen when the temperature sensor becomes unavailable.
+
+        Last check: {{ states('sensor.trv_binding_check_time') }}
+
+        Use the dashboard to view details or trigger auto-repair.
+    action: notify.persistent_notification
+  - action: notify.mobile_app_YOUR_PHONE # EDIT THIS LINE
+    data:
+      title: TRV Remote Sensing Issue
+      message: "{{ states('sensor.trv_unhealthy_count') }} TRV(s) need attention"
+      data:
+        actions:
+          - action: REPAIR_TRV_BINDINGS
+            title: Auto-Repair
+  - data:
+      level: warning
+      message: >
+        TRV binding check failed: {{ states('sensor.trv_unhealthy_count') }}
+        unhealthy TRVs
+    action: system_log.write
+mode: single

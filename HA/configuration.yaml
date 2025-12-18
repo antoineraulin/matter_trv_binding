@@ -1,0 +1,9 @@
+allowlist_external_dirs:
+  - /config/scripts
+
+shell_command:
+  # Check TRV status and write to file
+  check_trv_bindings: "python3 /config/scripts/monitor_binding.py --output-file /config/scripts/trv_status.json --exit-code"
+
+  # Check and auto-repair if needed
+  repair_trv_bindings: "python3 /config/scripts/monitor_binding.py --output-file /config/scripts/trv_status.json --auto-repair"

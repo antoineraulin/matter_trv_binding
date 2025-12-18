@@ -1,0 +1,7 @@
+sequence:
+  - event: trv_binding_repair_requested
+    event_data:
+      triggered_by: manual_script
+alias: Repair TRV Bindings
+description: ""
+icon: mdi:wrench

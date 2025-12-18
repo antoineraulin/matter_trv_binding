@@ -1,0 +1,9 @@
+sequence:
+  - action: automation.trigger
+    target:
+      entity_id: automation.trv_binding_periodic_check
+    data:
+      skip_condition: true
+alias: Check TRV Bindings Now
+description: ""
+icon: mdi:refresh

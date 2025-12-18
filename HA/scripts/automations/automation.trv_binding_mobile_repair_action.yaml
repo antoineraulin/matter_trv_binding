@@ -1,0 +1,12 @@
+alias: TRV Binding - Mobile Repair Action
+description: Handle repair action from mobile notification
+triggers:
+  - event_type: mobile_app_notification_action
+    event_data:
+      action: REPAIR_TRV_BINDINGS
+    trigger: event
+actions:
+  - event: trv_binding_repair_requested
+    event_data:
+      triggered_by: mobile_notification
+mode: single

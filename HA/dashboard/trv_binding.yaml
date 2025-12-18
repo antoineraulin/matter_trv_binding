@@ -1,0 +1,49 @@
+type: vertical-stack
+cards:
+  - type: entities
+    title: TRV Remote Sensing Monitor
+    entities:
+      - entity: binary_sensor.trv_bindings_problem
+        name: Problem Status
+      - type: divider
+      - entity: sensor.trv_healthy_count
+        name: Healthy TRVs
+      - entity: sensor.trv_unhealthy_count
+        name: Unhealthy TRVs
+      - entity: sensor.trv_total_count
+        name: Total TRVs
+      - type: divider
+      - entity: sensor.trv_binding_check_time
+        name: Last Check
+      - entity: sensor.trv_repaired_count
+        name: Last Repair Count
+  - type: horizontal-stack
+    cards:
+      - show_name: true
+        show_icon: true
+        type: button
+        name: Check Now
+        icon: mdi:refresh
+        tap_action:
+          action: perform-action
+          perform_action: script.check_trv_bindings_now
+          target: {}
+        hold_action:
+          action: none
+      - show_name: true
+        show_icon: true
+        type: button
+        name: Auto-Repair
+        icon: mdi:wrench
+        tap_action:
+          action: perform-action
+          perform_action: script.repair_trv_bindings
+          target: {}
+        hold_action:
+          action: more-info
+  - type: history-graph
+    title: TRV Health History
+    entities:
+      - entity: sensor.trv_healthy_count
+      - entity: sensor.trv_unhealthy_count
+    hours_to_show: 24

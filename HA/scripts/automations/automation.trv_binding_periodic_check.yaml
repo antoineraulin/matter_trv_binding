@@ -1,0 +1,49 @@
+alias: TRV Binding - Periodic Check
+description: Check TRV remote sensing status every 30 minutes
+triggers:
+  - minutes: /30
+    trigger: time_pattern
+  - event: start
+    trigger: homeassistant
+actions:
+  - action: shell_command.check_trv_bindings
+    data: {}
+  - delay:
+      hours: 0
+      minutes: 1
+      seconds: 0
+      milliseconds: 0
+  - target:
+      entity_id:
+        - sensor.trv_binding_status_raw
+        - sensor.trv_binding_check_time
+        - sensor.trv_total_count
+        - sensor.trv_healthy_count
+        - sensor.trv_unhealthy_count
+        - sensor.trv_repaired_count
+    action: homeassistant.update_entity
+    data: {}
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: binary_sensor.trv_bindings_problem
+            state: "off"
+        sequence:
+          - data:
+              name: TRV Binding Monitor
+              message: All {{ states('sensor.trv_total_count') }} TRVs are healthy
+              entity_id: binary_sensor.trv_bindings_problem
+            action: logbook.log
+      - conditions:
+          - condition: state
+            entity_id: binary_sensor.trv_bindings_problem
+            state: "on"
+        sequence:
+          - data:
+              name: TRV Binding Monitor
+              message: >-
+                ⚠️ {{ states('sensor.trv_unhealthy_count') }} of {{
+                states('sensor.trv_total_count') }} TRVs lost remote sensing!
+              entity_id: binary_sensor.trv_bindings_problem
+            action: logbook.log
+mode: single
