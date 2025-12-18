@@ -53,7 +53,7 @@ toc::[]
 These scripts have been tested and verified with the following hardware (over a ~1 month period with 6 TRVs and 4 sensors):
 
 * **TRVs**: Eve Thermo (various generations: native Matter and HomeKit-upgraded-to-Matter).
-* **Sensors**: Zigbee thermometers exposed to Matter via the **Home Assistant Matter Hub** helper.
+* **Sensors**: Zigbee thermometers exposed to Matter via the **Home Assistant Matter Hub** addons.
 
 
 _It may work with other Matter thermostats, but this is not guaranteed._
