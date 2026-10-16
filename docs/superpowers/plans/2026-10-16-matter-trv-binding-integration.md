@@ -50,13 +50,13 @@ The five input classes most likely to bite a user, and the tasks that pin them w
 **Interfaces:**
 - Produces: `const.DOMAIN = "matter_trv_binding"`, all cluster/attribute constants, `TrvStatus` enum, `DEFAULT_URL`, option-key constants — every later task imports from `custom_components/matter_trv_binding.const`.
 
-- [ ] **Step 1: Create the branch and clean tree**
+- [x] **Step 1: Create the branch and clean tree**
 
 ```bash
 git checkout --orphan ha-integration && git rm -rf . && git checkout main -- docs/ && git commit -m "chore: start integration branch"
 ```
 
-- [ ] **Step 2: Write `const.py`** with exactly:
+- [x] **Step 2: Write `const.py`** with exactly:
 
 ```python
 """Constants for the Matter TRV Binding integration."""
@@ -96,7 +96,7 @@ class TrvStatus(StrEnum):
     DEVICE_MISSING = "device_missing"
 ```
 
-- [ ] **Step 3: Write `manifest.json`** with exactly:
+- [x] **Step 3: Write `manifest.json`** with exactly:
 
 ```json
 {
@@ -116,7 +116,7 @@ class TrvStatus(StrEnum):
 }
 ```
 
-- [ ] **Step 4: Write `translations/en.json`** — full file (later tasks reference these keys; do not invent new ones without adding them here):
+- [x] **Step 4: Write `translations/en.json`** — full file (later tasks reference these keys; do not invent new ones without adding them here):
 
 ```json
 {
@@ -190,7 +190,7 @@ class TrvStatus(StrEnum):
 }
 ```
 
-- [ ] **Step 5: Write the small config files**
+- [x] **Step 5: Write the small config files**
 
 - `hacs.json`: `{"name": "Matter TRV Binding", "homeassistant": "2026.8.0"}`
 - `pytest.ini`:
@@ -202,7 +202,7 @@ class TrvStatus(StrEnum):
 - `README.md` stub (one line: project name + "Home Assistant custom integration for native Matter sensor→TRV bindings. Work in progress.")
 - `.gitignore`: `__pycache__/`, `.pytest_cache/`, `*.pyc`
 
-- [ ] **Step 6: Write the failing test** `tests/test_scaffold.py`:
+- [x] **Step 6: Write the failing test** `tests/test_scaffold.py`:
 
 ```python
 """Scaffold sanity tests."""
@@ -226,9 +226,9 @@ def test_translations_parse():
     assert "config" in data and "options" in data and "issues" in data
 ```
 
-- [ ] **Step 7: Run tests** — `python -m pytest tests/ -x -q` → PASS (2 tests)
+- [x] **Step 7: Run tests** — `python -m pytest tests/ -x -q` → PASS (2 tests)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A && git commit -m "feat: scaffold integration, manifest, constants, translations"
@@ -246,7 +246,7 @@ git add -A && git commit -m "feat: scaffold integration, manifest, constants, tr
 - Produces: `FakeMatterClient` (full fake of `matter_server.client.MatterClient`) and pytest fixtures `fake_client`, `matter_devices`. Every later task's tests rely on these.
 - `FakeMatterClient` API used by production code: `async connect()`, `async start_listening(init_ready)`, `async close()`, `async send_command(command: str, **kwargs)`, `async get_server_info() -> dict`, `subscribe(callback) -> callable`.
 
-- [ ] **Step 1: Write `tests/fake_matter.py`** — a stateful fake:
+- [x] **Step 1: Write `tests/fake_matter.py`** — a stateful fake:
 
 ```python
 """Fake MatterClient for tests. Mirrors only the command protocol the integration uses."""
@@ -316,7 +316,7 @@ class FakeMatterClient:
         raise ValueError(f"unknown command {command}")
 ```
 
-- [ ] **Step 2: Write `tests/conftest.py`** — exactly:
+- [x] **Step 2: Write `tests/conftest.py`** — exactly:
 
 ```python
 """Shared fixtures."""
@@ -368,7 +368,7 @@ def matter_devices(hass):
     return MatterDeviceFactory(hass)
 ```
 
-- [ ] **Step 3: Write `tests/test_fake_client.py`**:
+- [x] **Step 3: Write `tests/test_fake_client.py`**:
 
 ```python
 from tests.fake_matter import FakeMatterClient
@@ -391,9 +391,9 @@ async def test_fail_nodes_raise():
         pass
 ```
 
-- [ ] **Step 4: Run** — `python -m pytest tests/ -x -q` → PASS. If `patch_matter_client` fails because `custom_components.matter_trv_binding.matter.client` doesn't exist yet, add empty package files `custom_components/matter_trv_binding/matter/__init__.py` and `custom_components/matter_trv_binding/matter/client.py` (just `"""Matter connection layer."""`).
+- [x] **Step 4: Run** — `python -m pytest tests/ -x -q` → PASS. If `patch_matter_client` fails because `custom_components.matter_trv_binding.matter.client` doesn't exist yet, add empty package files `custom_components/matter_trv_binding/matter/__init__.py` and `custom_components/matter_trv_binding/matter/client.py` (just `"""Matter connection layer."""`).
 
-- [ ] **Step 5: Commit** — `git add -A && git commit -m "test: fake matter client and fixtures"`
+- [x] **Step 5: Commit** — `git add -A && git commit -m "test: fake matter client and fixtures"`
 
 ---
 
@@ -424,7 +424,7 @@ class MatterConnection:
     def subscribe(self, callback: Callable[[str, dict], None]) -> Callable[[], None]
 ```
 
-- [ ] **Step 1: Verify the real client API before implementing.** Run:
+- [x] **Step 1: Verify the real client API before implementing.** Run:
 
 ```bash
 python - <<'EOF'
@@ -438,7 +438,7 @@ EOF
 
 `_create_client(hass, url)` must call `MatterClient(url, <second positional arg as printed>)` using `homeassistant.helpers.aiohttp_client.async_get_clientsession(hass)` when the signature requires a session. If `subscribe`'s real signature differs from `subscribe(callback)`, adapt **inside** `MatterConnection.subscribe` — our wrapper's public signature above stays fixed.
 
-- [ ] **Step 2: Write failing tests** `tests/test_connection.py`:
+- [x] **Step 2: Write failing tests** `tests/test_connection.py`:
 
 ```python
 from custom_components.matter_trv_binding.matter.client import (
@@ -507,9 +507,9 @@ async def test_subscribe_roundtrip(fake_client):
     assert len(events) == 1 and events[0][1]["node_id"] == 5
 ```
 
-- [ ] **Step 3: Run** — `python -m pytest tests/test_connection.py -x -q` → FAIL (module not implemented).
+- [x] **Step 3: Run** — `python -m pytest tests/test_connection.py -x -q` → FAIL (module not implemented).
 
-- [ ] **Step 4: Implement `matter/client.py`.** Notes that pin choices:
+- [x] **Step 4: Implement `matter/client.py`.** Notes that pin choices:
   - `async_connect`: call factory, `await client.connect()`, wrap any exception in `MatterConnectionError`; then `await client.start_listening(lambda: None)`; get server info via `await client.send_command("get_server_info")` if the client has no `get_server_info` attribute, else `await client.get_server_info()`.
   - `read_attribute`: `result = await self.send_command("read_attribute", node_id=node_id, attribute_path=attribute_path)`; return `result.get(attribute_path)` (raw protocol returns a path-keyed dict — proven in the legacy scripts).
   - `write_attribute`: call send_command; scan the returned list; any entry with `Status != 0` → raise `MatterCommandError` with the path.
@@ -517,7 +517,7 @@ async def test_subscribe_roundtrip(fake_client):
   - `async_ensure_connected`: if a flag on self says connected, return; else `async_connect()` inside `try`, and on failure raise `MatterConnectionError`. Backoff bookkeeping can be a simple `self._retry_delay` doubling from 5 to 300, reset on success. Keep it synchronous-simple: no background task; callers (coordinator) call this at the start of every cycle.
   - `subscribe(callback)`: delegate to the real client's subscribe (per Step 1's inspection); return its unsubscribe wrapped as a plain callable.
 
-- [ ] **Step 5: Run** — PASS. **Step 6: Commit** — `git add -A && git commit -m "feat: matter connection wrapper with reconnect and event subscription"`
+- [x] **Step 5: Run** — PASS. **Step 6: Commit** — `git add -A && git commit -m "feat: matter connection wrapper with reconnect and event subscription"`
 
 ---
 
@@ -550,7 +550,7 @@ async def async_resolve_device(connection, hass, device_id: str, wanted_cluster:
     # raises DeviceMissingError (registry entry gone), NodeUnreachableError (read fails / no matching endpoint)
 ```
 
-- [ ] **Step 1: Write failing tests** `tests/test_discovery.py`:
+- [x] **Step 1: Write failing tests** `tests/test_discovery.py`:
 
 ```python
 import pytest
@@ -627,12 +627,12 @@ async def test_resolve_unreachable_node_raises(hass, fake_client, matter_devices
 
 (Remove the malformed `test_parse_returns_none_for_foreign_device` draft above and replace it with a single clean test: create a device with identifiers `{("other_domain", "x")}` via `dr.async_get(hass).async_get_or_create` and assert `parse_matter_node_id(...) is None`.)
 
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement `discovery.py`.** Pinning the algorithm:
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement `discovery.py`.** Pinning the algorithm:
   - `parse_matter_node_id`: iterate `device.identifiers`; find the tuple whose first element is `"matter"`; regex `^deviceid_[0-9A-F]{16}-([0-9A-F]{16})-.*$` on the second element; return `int(group1, 16)` or `None`.
   - `async_scan_node`: read PartsList via `connection.read_attribute(node_id, "0/29/0")` (a list of endpoint ids, endpoint 0 included); for each endpoint read `f"{ep}/29/1"` (ServerList → cluster set) and `f"{ep}/29/0"` (DeviceTypeList → tuple of `entry.get("deviceType", entry.get("device_type", 0))`). If PartsList read returns None → raise `NodeUnreachableError`.
   - `async_resolve_device`: `dr.async_get(hass).async_get(device_id)` — `None` → `DeviceMissingError`; `parse_matter_node_id` → None → `DeviceMissingError`; scan; pick the lowest endpoint id whose cluster set contains `wanted_cluster`; none → `NodeUnreachableError` (the device can't serve this role). Wrap connection errors from the scan as `NodeUnreachableError`.
-- [ ] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: matter device discovery (registry -> node/endpoint resolution)"`
+- [x] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: matter device discovery (registry -> node/endpoint resolution)"`
 
 ---
 
@@ -657,7 +657,7 @@ async def async_apply_acl(connection, sensor_node_id: int, sensor_endpoint: int,
     # raises MatterCommandError on failure; NEVER leaves the node without an admin entry
 ```
 
-- [ ] **Step 1: Write failing tests** `tests/test_acl.py`:
+- [x] **Step 1: Write failing tests** `tests/test_acl.py`:
 
 ```python
 from custom_components.matter_trv_binding.matter.acl import (
@@ -727,11 +727,11 @@ async def test_apply_never_drops_admin_even_on_replacing_server(fake_client):
     assert any(normalize_acl_entry(e)["privilege"] == 5 for e in acl), "admin entry must be restored"
 ```
 
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement `acl.py`.** Pins:
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement `acl.py`.** Pins:
   - `async_apply_acl`: read current list via `read_attribute(sensor_node_id, "0/31/0")` (default `[]`); `send_command("set_acl_entry", node_id=…, entry=desired)`; re-read; if the re-read lost any previously-present entry with normalized `privilege == 5` (PRIVILEGE_ADMIN), re-write the ORIGINAL full list via `send_command("write_attribute", node_id=…, attribute_path="0/31/0", value=original_list)` and raise `MatterCommandError("ACL write would remove admin access; rolled back")`. Then verify; raise if our entry still absent.
   - `# shortcut:` one ACL entry per sensor endpoint per TRV-set; consolidating multiple endpoints into one entry (the legacy script's trick) is not implemented — few users hit the ~4-entry device limit with one endpoint per binding. Upgrade: group entries by TRV set before writing.
-- [ ] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: acl provisioning with lockout safety"`
+- [x] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: acl provisioning with lockout safety"`
 
 ---
 
@@ -754,7 +754,7 @@ async def async_apply_trv(connection, trv: MatterDevice, sensor: MatterDevice) -
     # set_node_binding + read/OR-1/write RemoteSensing
 ```
 
-- [ ] **Step 1: Write failing tests** `tests/test_bindings.py`:
+- [x] **Step 1: Write failing tests** `tests/test_bindings.py`:
 
 ```python
 from custom_components.matter_trv_binding.const import TrvStatus
@@ -813,11 +813,11 @@ async def test_apply_trv_preserves_other_sensing_bits(fake_client):
     assert fake_client.attributes[20]["1/513/26"] == 3
 ```
 
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement `bindings.py`.** Pins:
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement `bindings.py`.** Pins:
   - `async_check_trv`: read `f"{trv.endpoint}/30/0"` (list, default `[]`) and `f"{trv.endpoint}/513/26"`; healthy = any normalized binding == `(sensor.node_id, sensor.endpoint, 1026)` **and** remote sensing value is not None and `value & 1`; binding wrong → BINDING_MISSING; binding right but bit 0 unset (or value None) → REMOTE_SENSING_OFF; any connection exception → UNREACHABLE.
   - `async_apply_trv`: `send_command("set_node_binding", node_id=trv.node_id, endpoint=trv.endpoint, bindings=desired_binding(sensor))`; then read RemoteSensing (None→0), and if `value & 1 == 0` write `value | 1` via `write_attribute(trv.node_id, f"{trv.endpoint}/513/26", value | 1)`.
-- [ ] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: binding and remote-sensing apply/verify operations"`
+- [x] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: binding and remote-sensing apply/verify operations"`
 
 ---
 
@@ -849,7 +849,7 @@ async def async_setup_entry(hass, entry) -> bool
 async def async_unload_entry(hass, entry) -> bool
 ```
 
-- [ ] **Step 1: Write failing tests** `tests/test_hub_setup.py`:
+- [x] **Step 1: Write failing tests** `tests/test_hub_setup.py`:
 
 ```python
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -878,13 +878,13 @@ async def test_hub_setup_not_ready_when_server_down(hass, fake_client):
     assert entry.state is hass.config_entries.ConfigEntryState.SETUP_RETRY
 ```
 
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement.** Pins:
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement.** Pins:
   - `type MatterTrvBindingConfigEntry = ConfigEntry[HubRuntimeData | BindingRuntimeData]` (define `BindingRuntimeData` in Task 10; for now a comment). In `async_setup_entry`: `if entry.unique_id == HUB_UNIQUE_ID:` hub branch else binding branch.
   - Hub branch: `connection = await async_create_connection(hass, entry.data["url"])` — `async_create_connection` builds `MatterConnection(url, client_factory=lambda url: _create_client(hass, url))`, calls `async_connect()`, and re-raises `MatterConnectionError` as `ConfigEntryNotReady(f"cannot connect to {url}")`. Store `entry.runtime_data = HubRuntimeData(connection=connection, repair_counts={})`.
   - Unload (hub): `await entry.runtime_data.connection.async_close()`; return True.
   - Binding branch in `__init__` for now: `raise NotImplementedError` wrapped so setup fails cleanly (`return False` is fine; HA logs an error).
-- [ ] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: hub config entry with connection lifecycle"`
+- [x] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: hub config entry with connection lifecycle"`
 
 ---
 
@@ -898,7 +898,7 @@ async def test_hub_setup_not_ready_when_server_down(hass, fake_client):
 - Consumes: hub setup (Task 7), `DEFAULT_URL`, translations from Task 1.
 - Produces: `MatterTrvBindingConfigFlow` with `async_step_user` → hub schema (binding flow added in Task 11 in the same class).
 
-- [ ] **Step 1: Write failing tests** `tests/test_config_flow_hub.py`:
+- [x] **Step 1: Write failing tests** `tests/test_config_flow_hub.py`:
 
 ```python
 from pytest_homeassistant_custom_component.common import MockConfigEntry, patch
@@ -936,12 +936,12 @@ async def test_hub_flow_cannot_connect_shows_error(hass, fake_client):
     assert result["type"] == "form" and result["errors"] == {"base": "cannot_connect"}
 ```
 
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement the flow.** Pins:
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement the flow.** Pins:
   - `class MatterTrvBindingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)`, `VERSION = 1`.
   - `async_step_user`: `await self.async_set_unique_id(HUB_UNIQUE_ID)`; `self._abort_if_unique_id_configured()`; if aborted → the binding path (Task 11) — for now catch `_AbortFlow`... simpler: `try: await self.async_set_unique_id(...); self._abort_if_unique_id_configured(); except data_entry_flow.AbortFlow: return await self.async_step_binding()` — add `async_step_binding` in Task 11; for this task return `self.async_abort(reason="already_configured")` in that branch. Then show the hub form: schema `vol.Schema({vol.Required("name", default="Matter TRV Binding"): str, vol.Required("url", default=DEFAULT_URL): str})`, step_id `"hub"`.
   - On submit: validate with `hub.async_create_connection(self.hass, url)` — catch `MatterConnectionError` → `errors["base"] = "cannot_connect"` and re-show; on success `async_close()` the validation connection and `return self.async_create_entry(title=name, data={"name": name, "url": url})` (unique id already set).
-- [ ] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: hub config flow"`
+- [x] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: hub config flow"`
 
 ---
 
@@ -980,7 +980,7 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
     node_changes: list[tuple[str, int, int]]                 # (device_id, old_node_id, new_node_id) recorded per cycle
 ```
 
-- [ ] **Step 1: Write failing tests** `tests/test_coordinator.py` (seed the fake so a full healthy cycle needs: sensor node 9/ep 361 with ACL entry granting TRVs, TRV node 20/ep 1 with binding + sensing):
+- [x] **Step 1: Write failing tests** `tests/test_coordinator.py` (seed the fake so a full healthy cycle needs: sensor node 9/ep 361 with ACL entry granting TRVs, TRV node 20/ep 1 with binding + sensing):
 
 ```python
 from datetime import timedelta
@@ -1084,8 +1084,8 @@ async def test_node_id_change_auto_heals_and_notifies(hass, fake_client, matter_
 
 For the notification assertion, do not rely on states; instead assert the coordinator flagged the change: add to `BindingCoordinator` a public `self.node_changes: list[tuple[str, int, int]]` (device_id, old, new) recorded during the cycle, and assert `coord.node_changes == [(trv.id, 20, 100)]`. (The persistent notification itself is created in the coordinator with `hass.components.persistent_notification.async_create(hass, message=…, title="Matter TRV Binding", notification_id=f"{DOMAIN}_node_change_{entry.entry_id}_{device_id}")` and dismissed with `async_dismiss` on the next healthy verify — cover the flag, not the HA side effect.)
 
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement `coordinator.py`.** Pins:
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement `coordinator.py`.** Pins:
   - Constructor: `DataUpdateCoordinator.__init__(hass, logger, name=f"{DOMAIN}_{entry.entry_id}", update_interval=timedelta(minutes=hub_options_update_interval))` where hub options = `hub_entry.options.get(OPT_UPDATE_INTERVAL_MINUTES, DEFAULT_UPDATE_INTERVAL_MINUTES)` etc. `always_update=False`? No — data includes `last_check`, so leave default.
   - `_async_update_data` cycle, in order:
     1. `await hub.connection.async_ensure_connected()` — `MatterConnectionError` → raise `UpdateFailed`.
@@ -1098,7 +1098,7 @@ For the notification assertion, do not rely on states; instead assert the coordi
   - `async_check_and_repair(force=True)`: `await self.async_request_refresh()` (the cycle IS verify+repair; force is in the signature for the button/service call sites and future use).
   - Fast path in `__init__`: `self.node_changes = []`; `self._last_node_ids = {}`; store `self._known_trv_nodes: set[int]` (filled each cycle from resolution); subscribe once — `self._unsub = hub_entry.runtime_data.connection.subscribe(self._on_matter_event)`; `_on_matter_event(event_type, data)`: if `event_type == "attribute_updated"` and `data.get("node_id")` in `self._known_trv_nodes` → `self.hass.async_create_task(self.async_request_refresh())`. Unsubscribe in `__init__.py`'s unload via `entry.async_on_unload(self._unsub)`. Add one test: seed healthy, `await coord._async_update_data()`, then `fake_client.emit_event("attribute_updated", {"node_id": 20})`, `await hass.async_block_till_done()`, and assert a refresh ran (e.g. `coord.last_update_success` and `coord.data.trvs` populated via the public coordinator path).
   - `# shortcut:` endpoints are re-resolved every cycle (no cache) — costs a few descriptor reads per poll; upgrade: cache per node_id if polling ever moves below one minute.
-- [ ] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: binding verify/repair coordinator with escalation and node-change healing"`
+- [x] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: binding verify/repair coordinator with escalation and node-change healing"`
 
 ---
 
@@ -1129,7 +1129,7 @@ Entities (all attached to the binding device):
 - `sensor.<binding>_repairs` — `state_class=SensorStateClass.TOTAL_INCREASING` (from `hub.runtime_data.repair_counts`)
 - `button.<binding>_check_and_repair` — press → coordinator check
 
-- [ ] **Step 1: Write failing tests** `tests/test_binding_setup.py`:
+- [x] **Step 1: Write failing tests** `tests/test_binding_setup.py`:
 
 ```python
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -1169,13 +1169,13 @@ async def test_binding_setup_without_hub_fails(hass, fake_client, matter_devices
     assert binding.state is hass.config_entries.ConfigEntryState.SETUP_RETRY
 ```
 
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement.** Pins:
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement.** Pins:
   - `__init__.py` binding branch: `hub = get_hub_entry(hass)`; `None` → `raise ConfigEntryNotReady("Matter TRV Binding hub is not set up")`. Create `BindingCoordinator`, `await coordinator.async_config_entry_first_refresh()`, store `entry.runtime_data = BindingRuntimeData(coordinator)`, then `await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)` wrapped with `entry.async_on_unload(...)`.
   - Device creation (in `__init__`, `dr.async_get_or_create(config_entry_id=entry.entry_id, identifiers={(DOMAIN, entry.entry_id)}, name=f"Matter Binding — {entry.data['label']}", via_device=("matter", <the sensor device's matter identifier string>))` — get the identifier from the sensor registry entry's identifiers; skip `via_device` if the sensor device is missing.
   - Entities are `CoordinatorEntity`s; `PARALLEL_UPDATES = 1` in each platform module. Unique ids: `f"{entry.entry_id}_{trv_device_id}_binding"`, `f"{entry.entry_id}_{trv_device_id}_status"`, `f"{entry.entry_id}_last_check"`, `f"{entry.entry_id}_repairs"`, `f"{entry.entry_id}_check_and_repair"`. Translation keys per entity: set `has_entity_name=True` and `_attr_translation_key` (`binding`, `status`, `last_check`, `repairs`, `check_and_repair`) — add an `entity` section to `translations/en.json` with `binary_sensor`/`sensor`/`button` names.
   - Binding unload: platforms unload; return True.
-- [ ] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: binding entry setup with health entities and repair button"`
+- [x] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: binding entry setup with health entities and repair button"`
 
 ---
 
@@ -1190,7 +1190,7 @@ async def test_binding_setup_without_hub_fails(hass, fake_client, matter_devices
 - Consumes: `get_hub_entry`, `async_resolve_device`, `async_apply_acl`, `async_apply_trv`, `async_check_trv`, `async_verify_acl`; `DeviceSelector`, `DeviceFilterIntegration` from `homeassistant.helpers.selector`.
 - Produces: `async_step_binding` on the flow (already routed from Task 8's `async_step_user`).
 
-- [ ] **Step 1: Write failing tests** `tests/test_config_flow_binding.py`:
+- [x] **Step 1: Write failing tests** `tests/test_config_flow_binding.py`:
 
 ```python
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -1253,12 +1253,12 @@ async def test_binding_flow_rejects_unreachable(hass, fake_client, matter_device
     assert result["type"] == "form" and result["errors"] == {"base": "unreachable"}
 ```
 
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement `async_step_binding`.** Pins:
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement `async_step_binding`.** Pins:
   - Schema: `vol.Schema({vol.Optional("label"): str, vol.Required("sensor_device"): DeviceSelector(device_filter=DeviceFilterIntegration(integration="matter")), vol.Required("trv_devices"): DeviceSelector(device_filter=DeviceFilterIntegration(integration="matter"), multiple=True)})`, step_id `"binding"`.
   - Unique id: `await self.async_set_unique_id(sensor_device_id)`; `self._abort_if_unique_id_configured()` → abort reason `already_configured_sensor`.
   - Validation+apply on submit (using `get_hub_entry(hass).runtime_data.connection`): resolve sensor with `CLUSTER_TEMPERATURE_MEASUREMENT` → `NodeUnreachableError` → `errors["base"]="invalid_sensor"`; resolve each TRV with `CLUSTER_THERMOSTAT` → collect failures → `errors["base"]="invalid_trv"` with `devices` placeholder; unreachable TRVs → `"unreachable"`. Then apply: `async_apply_acl`, then per TRV `async_apply_trv`, then verify (`async_verify_acl` + `async_check_trv` == BOUND per TRV); any failure → `errors["base"]="apply_failed"` with `detail`. On all-good: `return self.async_create_entry(title=label or sensor_name, data={...})`.
-- [ ] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: binding config flow with device pickers and apply-on-create"`
+- [x] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: binding config flow with device pickers and apply-on-create"`
 
 ---
 
@@ -1273,7 +1273,7 @@ async def test_binding_flow_rejects_unreachable(hass, fake_client, matter_device
 - Consumes: binding entries' `runtime_data.coordinator`; binding device identifiers `(DOMAIN, entry_id)`.
 - Produces: service `matter_trv_binding.repair` (device target).
 
-- [ ] **Step 1: Write failing tests** `tests/test_services.py`:
+- [x] **Step 1: Write failing tests** `tests/test_services.py`:
 
 ```python
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -1304,8 +1304,8 @@ async def test_repair_service_triggers_refresh(hass, fake_client, matter_devices
     assert fake_client.attributes[20]["1/30/0"]  # repaired
 ```
 
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement.** Pins:
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement.** Pins:
   - `services.yaml`:
     ```yaml
     repair:
@@ -1315,7 +1315,7 @@ async def test_repair_service_triggers_refresh(hass, fake_client, matter_devices
     ```
   - `services.py`: `async_register_services(hass)` registers `"repair"` with schema `vol.Schema({vol.Required(ATTR_DEVICE_ID): vol.Any(str, [str])})`; handler normalizes to a list, resolves each device id through the device registry to find our binding devices, looks up the matching binding entry (`hass.config_entries.async_entry_for_domain_unique_id`? no — iterate `hass.config_entries.async_entries(DOMAIN)` and match `entry.entry_id` against the identifier), and awaits each coordinator's `async_check_and_repair()`. Unknown device ids are ignored.
   - Register in the hub setup branch: `entry.async_on_unload(lambda: hass.services.async_remove(DOMAIN, "repair"))` after `async_register_services(hass)`.
-- [ ] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: repair service with device target"`
+- [x] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: repair service with device target"`
 
 ---
 
@@ -1330,7 +1330,7 @@ async def test_repair_service_triggers_refresh(hass, fake_client, matter_devices
 - Consumes: `const` option keys/defaults; Task 11's binding validation+apply helpers.
 - Produces: `MatterTrvBindingOptionsFlowHandler` (`async_get_options_flow` staticmethod on the config flow) and `async_step_reconfigure` on the config flow.
 
-- [ ] **Step 1: Before implementing, verify the exact HA signatures** on the installed version:
+- [x] **Step 1: Before implementing, verify the exact HA signatures** on the installed version:
 
 ```bash
 python - <<'EOF'
@@ -1342,7 +1342,7 @@ EOF
 
 If `data_updates` is not in the printed signature, use the `data=` kwarg instead — the reconfigure submit step must call `self.async_update_reload_and_abort(self._get_reconfigure_entry(), data_updates=new_data)` (or `data=new_data` per the printed signature).
 
-- [ ] **Step 2: Write failing tests** `tests/test_flows_options.py`:
+- [x] **Step 2: Write failing tests** `tests/test_flows_options.py`:
 
 ```python
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -1397,12 +1397,12 @@ async def test_binding_reconfigure_changes_trv_list(hass, fake_client, matter_de
     assert fake_client.attributes[20]["1/30/0"]
 ```
 
-- [ ] **Step 3: Run** — FAIL.
-- [ ] **Step 4: Implement.** Pins:
+- [x] **Step 3: Run** — FAIL.
+- [x] **Step 4: Implement.** Pins:
   - `async_get_options_flow(config_entry)` on the config flow class → returns `MatterTrvBindingOptionsFlowHandler(config_entry)` only for hub entries (`config_entry.unique_id == HUB_UNIQUE_ID`); binding entries have no options flow.
   - Options flow extends `OptionsFlowWithReload`; `async_step_init` shows schema `{update_interval_minutes: int (5–1440, default from options or 30), auto_repair: bool (default True), repair_attempts: int (1–10, default 3)}` using `add_suggested_values_to_schema`; on submit `return self.async_create_entry(data=user_input)`; then — because the binding coordinators read the interval only at creation — after the options flow creates its entry, reload every binding entry: in the options flow's `async_finish_flow` (or `async_create_entry` override) call `await self.hass.config_entries.async_reload(e.entry_id)` for all entries of the domain with `unique_id != HUB_UNIQUE_ID`. `OptionsFlowWithReload` already reloads the hub entry.
   - Reconfigure: `async_step_reconfigure` on the config flow: `entry = self._get_reconfigure_entry()`; `await self.async_set_unique_id(entry.unique_id)`; `self._abort_if_unique_id_mismatch()`; show the same schema as the binding step with `add_suggested_values_to_schema` from `entry.data`; on submit run the SAME validation+apply as Task 11 (factor the body of binding validation into a helper `_async_validate_and_apply(self, user_input) -> dict | None` returning `errors` or None, used by both steps); on success call `self.async_update_reload_and_abort(entry, data_updates={**entry.data, "label":…, "sensor_device_id":…, "trv_device_ids":…})` (or `data=` per Step 1 inspection).
-- [ ] **Step 5: Run** — PASS. **Step 6: Commit** — `git add -A && git commit -m "feat: hub options flow and binding reconfigure flow"`
+- [x] **Step 5: Run** — PASS. **Step 6: Commit** — `git add -A && git commit -m "feat: hub options flow and binding reconfigure flow"`
 
 ---
 
@@ -1416,7 +1416,7 @@ async def test_binding_reconfigure_changes_trv_list(hass, fake_client, matter_de
 - Consumes: the `device_missing` issue created in Task 9 (`data={"entry_id": ...}`).
 - Produces: `async_create_fix_flow(hass, issue_id, data)` for `device_missing` issues: a `RepairsFlow` whose `async_step_init` shows a confirmation form ("Remove this binding?") and, on submit, removes the config entry.
 
-- [ ] **Step 1: Write failing test** `tests/test_repairs.py`:
+- [x] **Step 1: Write failing test** `tests/test_repairs.py`:
 
 ```python
 from homeassistant.helpers import issue_registry as ir
@@ -1442,9 +1442,9 @@ async def test_device_missing_issue_offer_flow(hass, fake_client):
 
 (Also assert that `repairs.async_create_fix_flow` returns a flow whose `async_step_init` yields a form with a `confirm` key, and whose submit removes the config entry — use a real `MockConfigEntry` for the removal assertion.)
 
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement `repairs.py`**: `class BindingRepairFlow(ir.RepairsFlow)` with `async_step_init(user_input=None)`: None → form `vol.Schema({vol.Required("confirm"): bool})` with description placeholders; `True` → `await self.hass.config_entries.async_remove(self.data["entry_id"])` then `return self.async_create_entry(data={})`. `async_create_fix_flow(hass, issue_id, data)` returns `BindingRepairFlow(data)` when the issue id starts with `"device_missing_"`, else `None`. Module-level function `async_create_fix_flow` is what HA calls (signature `(hass, issue_id, data)`); register it by convention (HA discovers `repairs.py` in the integration automatically).
-- [ ] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: repairs fix flow for missing devices"`
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement `repairs.py`**: `class BindingRepairFlow(ir.RepairsFlow)` with `async_step_init(user_input=None)`: None → form `vol.Schema({vol.Required("confirm"): bool})` with description placeholders; `True` → `await self.hass.config_entries.async_remove(self.data["entry_id"])` then `return self.async_create_entry(data={})`. `async_create_fix_flow(hass, issue_id, data)` returns `BindingRepairFlow(data)` when the issue id starts with `"device_missing_"`, else `None`. Module-level function `async_create_fix_flow` is what HA calls (signature `(hass, issue_id, data)`); register it by convention (HA discovers `repairs.py` in the integration automatically).
+- [x] **Step 4: Run** — PASS. **Step 5: Commit** — `git add -A && git commit -m "feat: repairs fix flow for missing devices"`
 
 ---
 
@@ -1459,7 +1459,7 @@ async def test_device_missing_issue_offer_flow(hass, fake_client):
 - Consumes: `BindingData` (Task 9).
 - Produces: `async_get_config_entry_diagnostics(hass, entry)` for binding entries; `async_get_device_diagnostics` NOT implemented (spec: per entry is enough — `# shortcut:` skip device diagnostics; HA falls back to entry diagnostics).
 
-- [ ] **Step 1: Write failing test** `tests/test_diagnostics.py`:
+- [x] **Step 1: Write failing test** `tests/test_diagnostics.py`:
 
 ```python
 from homeassistant.components.diagnostics import REDACTED
@@ -1486,10 +1486,10 @@ async def test_diagnostics_redacts_node_ids(hass, fake_client, matter_devices):
     assert "fabric" not in str(diag).lower() or REDACTED
 ```
 
-- [ ] **Step 2: Run** — FAIL. **Step 3: Implement `diagnostics.py`:** `TO_REDACT = {"node_id", "fabric_id", "url"}`; return `{"entry_data": redacted entry.data, "options": entry.options, "sensor_ok": …, "trvs": {device_id: {"name": …, "node_id": …, "status": …, "healthy": …}}, "last_check": iso}` using `homeassistant.components.diagnostics.async_redact_data`. HA discovers `diagnostics.py` automatically; export the two constants/functions used above.
-- [ ] **Step 4: Run** — PASS.
-- [ ] **Step 5: `translations/fr.json`** — translate `en.json` faithfully (the author is a French speaker; use natural French, e.g. "Lier un capteur de température à des têtes thermostatives"). Verify it parses: `python -c "import json; json.load(open('custom_components/matter_trv_binding/translations/fr.json'))"`.
-- [ ] **Step 6: README** — sections: What it does (native Matter binding, sensor→TRV, auto-repair); Requirements (HA 2026.8+, Matter Server add-on 9.x — NOT legacy python-matter-server); Installation (HACS custom repo); Configuration walkthrough (hub entry, then one entry per room; device pickers resolve node/endpoint automatically); Entities and service table; Behavior notes: (a) writing RemoteSensing flips HA's own RemoteSensing diagnostic sensors — expected; (b) devices with >4 ACL entries per fabric may reject the ACL write — consolidate bindings on such nodes; (c) bindings survive integration removal (they live on the Matter devices; removing an entry removes OUR entities only — state clearly that uninstall does not clean up bindings/ACLs, no cleanup is implemented); Troubleshooting (repair issues, unreachable nodes, node-change notifications).
-- [ ] **Step 7: Full suite** — `python -m pytest tests/ -q` → all PASS. Fix anything broken by later tasks' changes.
-- [ ] **Step 8: Final self-check** — `python -c "import json,glob; [json.load(open(p)) for p in glob.glob('custom_components/**/*.json', recursive=True)]"` (all JSON parses) and grep the code for `hass.data[` (must be zero hits) and for `from homeassistant.components.matter` (must be zero hits outside comments).
-- [ ] **Step 9: Commit** — `git add -A && git commit -m "feat: diagnostics, french translations, documentation"`
+- [x] **Step 2: Run** — FAIL. **Step 3: Implement `diagnostics.py`:** `TO_REDACT = {"node_id", "fabric_id", "url"}`; return `{"entry_data": redacted entry.data, "options": entry.options, "sensor_ok": …, "trvs": {device_id: {"name": …, "node_id": …, "status": …, "healthy": …}}, "last_check": iso}` using `homeassistant.components.diagnostics.async_redact_data`. HA discovers `diagnostics.py` automatically; export the two constants/functions used above.
+- [x] **Step 4: Run** — PASS.
+- [x] **Step 5: `translations/fr.json`** — translate `en.json` faithfully (the author is a French speaker; use natural French, e.g. "Lier un capteur de température à des têtes thermostatives"). Verify it parses: `python -c "import json; json.load(open('custom_components/matter_trv_binding/translations/fr.json'))"`.
+- [x] **Step 6: README** — sections: What it does (native Matter binding, sensor→TRV, auto-repair); Requirements (HA 2026.8+, Matter Server add-on 9.x — NOT legacy python-matter-server); Installation (HACS custom repo); Configuration walkthrough (hub entry, then one entry per room; device pickers resolve node/endpoint automatically); Entities and service table; Behavior notes: (a) writing RemoteSensing flips HA's own RemoteSensing diagnostic sensors — expected; (b) devices with >4 ACL entries per fabric may reject the ACL write — consolidate bindings on such nodes; (c) bindings survive integration removal (they live on the Matter devices; removing an entry removes OUR entities only — state clearly that uninstall does not clean up bindings/ACLs, no cleanup is implemented); Troubleshooting (repair issues, unreachable nodes, node-change notifications).
+- [x] **Step 7: Full suite** — `python -m pytest tests/ -q` → all PASS. Fix anything broken by later tasks' changes.
+- [x] **Step 8: Final self-check** — `python -c "import json,glob; [json.load(open(p)) for p in glob.glob('custom_components/**/*.json', recursive=True)]"` (all JSON parses) and grep the code for `hass.data[` (must be zero hits) and for `from homeassistant.components.matter` (must be zero hits outside comments).
+- [x] **Step 9: Commit** — `git add -A && git commit -m "feat: diagnostics, french translations, documentation"`
