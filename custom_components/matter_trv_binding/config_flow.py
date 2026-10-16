@@ -49,7 +49,9 @@ _BINDING_SCHEMA = vol.Schema(
     {
         vol.Optional("label"): str,
         vol.Required("sensor_device"): DeviceSelector(_MATTER_FILTER),
-        vol.Required("trv_devices"): DeviceSelector({**_MATTER_FILTER, "multiple": True}),
+        vol.Required("trv_devices"): vol.All(
+            DeviceSelector({**_MATTER_FILTER, "multiple": True}), vol.Length(min=1)
+        ),
     }
 )
 

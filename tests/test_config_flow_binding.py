@@ -1,3 +1,5 @@
+import pytest
+from homeassistant.data_entry_flow import InvalidData
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.matter_trv_binding.const import DOMAIN
@@ -56,3 +58,18 @@ async def test_binding_flow_rejects_unreachable(hass, fake_client, matter_device
         result["flow_id"], {"label": "X", "sensor_device": sensor.id, "trv_devices": [trv.id]}
     )
     assert result["type"] == "form" and result["errors"] == {"base": "unreachable"}
+
+
+async def test_binding_flow_rejects_empty_trv_list(hass, fake_client, matter_devices):
+    await setup_hub(hass)
+    seed_healthy(fake_client)
+    sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
+    fake_client.attributes[9]["0/31/0"] = [{"1": 5, "2": 2, "3": [99], "4": []}]
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    with pytest.raises(InvalidData):
+        await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"label": "X", "sensor_device": sensor.id, "trv_devices": []}
+        )
+    # nothing was applied and no binding entry was created
+    assert len(fake_client.attributes[9]["0/31/0"]) == 1
+    assert len(hass.config_entries.async_entries(DOMAIN)) == 1
