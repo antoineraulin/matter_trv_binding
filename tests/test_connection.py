@@ -62,3 +62,24 @@ async def test_subscribe_roundtrip(fake_client):
     unsub()
     fake_client.emit_event("attribute_updated", {"node_id": 5})
     assert len(events) == 1 and events[0][1]["node_id"] == 5
+
+
+from tests.fake_matter import FakeMatterClient
+
+
+async def test_subscription_survives_reconnect(fake_client):
+    second = FakeMatterClient()
+    generation = {"n": 0}
+
+    def factory(url):
+        generation["n"] += 1
+        return fake_client if generation["n"] == 1 else second
+
+    conn = MatterConnection("ws://x", client_factory=factory)
+    await conn.async_connect()
+    events = []
+    conn.subscribe(lambda et, data: events.append(data))
+    fake_client.connected = False  # server drop; reconnect builds the second client
+    await conn.async_ensure_connected()
+    second.emit_event("attribute_updated", {"node_id": 5})
+    assert events == [{"node_id": 5}]
