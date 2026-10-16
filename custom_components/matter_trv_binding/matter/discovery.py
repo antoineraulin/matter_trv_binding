@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -21,8 +20,9 @@ from .client import MatterConnection, MatterConnectionError
 _MATTER_DOMAIN = "matter"
 _NODE_ID_RE = re.compile(r"^deviceid_[0-9A-F]{16}-([0-9A-F]{16})-.*$")
 
-# Descriptor cluster (0x001D) attributes: PartsList=0, ServerList=1, DeviceTypeList=0.
-_PARTS_LIST_PATH = f"0/{CLUSTER_DESCRIPTOR}/0"
+# Descriptor cluster (0x001D) attributes: DeviceTypeList=0x0000, ServerList=0x0001,
+# ClientList=0x0002, PartsList=0x0003.
+_PARTS_LIST_PATH = f"0/{CLUSTER_DESCRIPTOR}/3"
 
 
 class DeviceMissingError(Exception):
@@ -74,17 +74,12 @@ async def async_scan_node(
         )
         scanned[endpoint] = (
             set(clusters or ()),
-            tuple(_device_type(entry) for entry in device_types or ()),
+            tuple(
+                entry.get("deviceType", entry.get("device_type", 0))
+                for entry in device_types or ()
+            ),
         )
     return scanned
-
-
-def _device_type(entry: Any) -> int:
-    # Endpoint 0's DeviceTypeList path collides with the node PartsList read above,
-    # which returns plain endpoint ids; accept both shapes.
-    if isinstance(entry, dict):
-        return entry.get("deviceType", entry.get("device_type", 0))
-    return entry
 
 
 async def async_resolve_device(

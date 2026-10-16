@@ -38,7 +38,7 @@ async def test_parse_returns_none_for_foreign_device(hass):
 async def test_resolve_bridged_sensor(hass, fake_client, matter_devices):
     sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
     fake_client.attributes[9] = {
-        "0/29/0": [0, 361],
+        "0/29/3": [0, 361],
         "361/29/1": [1026],
         "361/29/0": [{"deviceType": 7, "revision": 1}],
     }
@@ -51,7 +51,7 @@ async def test_resolve_bridged_sensor(hass, fake_client, matter_devices):
 async def test_resolve_trv_finds_thermostat_endpoint(hass, fake_client, matter_devices):
     trv = matter_devices.create("Eve Thermo Bureau", 6)
     fake_client.attributes[6] = {
-        "0/29/0": [0, 1],
+        "0/29/3": [0, 1],
         "1/29/1": [513, 30],
         "1/29/0": [{"deviceType": 769, "revision": 3}],
     }
