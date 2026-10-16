@@ -4,7 +4,10 @@ from custom_components.matter_trv_binding.matter.acl import (
     acl_entry_grants, async_apply_acl, async_verify_acl, desired_acl_entry, normalize_acl_entry,
 )
 from custom_components.matter_trv_binding.matter.client import MatterConnection
-from custom_components.matter_trv_binding.const import CLUSTER_TEMPERATURE_MEASUREMENT
+from custom_components.matter_trv_binding.const import (
+    CLUSTER_TEMPERATURE_MEASUREMENT,
+    PRIVILEGE_VIEW,
+)
 
 def make_conn(fake_client):
     return MatterConnection("ws://x", client_factory=lambda url: fake_client)
@@ -78,6 +81,18 @@ async def test_apply_never_drops_admin_even_on_replacing_server(fake_client):
         pass
     acl = fake_client.attributes[9]["0/31/0"]
     assert any(normalize_acl_entry(e)["privilege"] == 5 for e in acl), "admin entry must be restored"
+
+
+async def test_apply_sends_entry_as_list(fake_client):
+    """Server contract: `entry` must be an array, else entries.map throws."""
+    fake_client.attributes[9] = {"0/31/0": [ADMIN]}
+    conn = make_conn(fake_client)
+    await async_apply_acl(conn, 9, 361, [20, 6], 7)
+    _, kwargs = next(
+        (c, k) for c, k in fake_client.commands if c == "set_acl_entry"
+    )
+    assert isinstance(kwargs["entry"], list)
+    assert kwargs["entry"][0]["privilege"] == PRIVILEGE_VIEW
 
 
 async def test_apply_warns_when_acl_exceeds_device_limit(fake_client, caplog):

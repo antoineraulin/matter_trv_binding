@@ -42,10 +42,16 @@ def normalize_binding(entry: dict) -> tuple[int | None, int | None, int | None]:
 
 
 def desired_binding(sensor: MatterDevice) -> list[dict]:
-    """The Binding entry that makes the TRV read the sensor's temperature cluster."""
+    """The Binding entry that makes the TRV read the sensor's temperature cluster.
+
+    ``group`` is explicit and ``None``: the server builds ``GroupId`` for every
+    key it receives (``!== null``, not "defined"), so an absent key reaches
+    ``GroupId(undefined)`` and throws. The key must always be present.
+    """
     return [
         {
             "node": sensor.node_id,
+            "group": None,
             "endpoint": sensor.endpoint,
             "cluster": CLUSTER_TEMPERATURE_MEASUREMENT,
         }

@@ -18,7 +18,9 @@ def test_normalize_both_spellings():
 
 
 def test_desired_binding_payload():
-    assert desired_binding(SENSOR) == [{"node": 9, "endpoint": 361, "cluster": 1026}]
+    assert desired_binding(SENSOR) == [
+        {"node": 9, "group": None, "endpoint": 361, "cluster": 1026}
+    ]
 
 
 async def test_check_healthy(fake_client):
@@ -44,7 +46,7 @@ async def test_check_unreachable(fake_client):
 async def test_apply_trv_writes_binding_and_sensing(fake_client):
     fake_client.attributes[20] = {"1/513/26": 0}
     await async_apply_trv(make_conn(fake_client), TRV, SENSOR)
-    assert fake_client.attributes[20]["1/30/0"] == [{"node": 9, "endpoint": 361, "cluster": 1026}]
+    assert fake_client.attributes[20]["1/30/0"] == [{"node": 9, "group": None, "endpoint": 361, "cluster": 1026}]
     assert fake_client.attributes[20]["1/513/26"] == 1   # OR'd, not overwritten
 
 

@@ -138,9 +138,13 @@ async def async_apply_acl(
     await connection.send_command(
         "set_acl_entry",
         node_id=sensor_node_id,
-        entry=desired_acl_entry(
-            trv_node_ids, CLUSTER_TEMPERATURE_MEASUREMENT, sensor_endpoint, device_type
-        ),
+        # Server contract: `entry` is an array of ACL entries (a bare object
+        # crashes the server's entries.map), so always send a one-element list.
+        entry=[
+            desired_acl_entry(
+                trv_node_ids, CLUSTER_TEMPERATURE_MEASUREMENT, sensor_endpoint, device_type
+            )
+        ],
     )
     current = await connection.read_attribute(sensor_node_id, ACL_ATTRIBUTE_PATH) or []
 
