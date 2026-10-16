@@ -92,6 +92,60 @@ async def test_apply_replaces_our_managed_grant(fake_client):
     assert managed[0]["subjects"] == [20, 6, 7]
 
 
+async def test_apply_reclaims_grants_to_dead_endpoints(fake_client):
+    """A grant to an endpoint no longer on the node is dropped before writing."""
+    fake_client.attributes[9] = {
+        "0/31/0": [
+            ADMIN,
+            {"1": 1, "2": 2, "3": [99], "4": [{"0": 1026, "1": 999}], "fabricIndex": 1},
+            {"1": 1, "2": 2, "3": [42], "4": [{"0": 1026, "1": 361}], "fabricIndex": 1},
+        ],
+        "0/29/3": [0, 361],   # live endpoints: 999 is gone
+    }
+    conn = make_conn(fake_client)
+    await async_apply_acl(conn, 9, 361, [20], 7)
+    acl = fake_client.attributes[9]["0/31/0"]
+    assert len(acl) == 2                                                   # admin + fresh grant
+    assert not any(t.get("endpoint") == 999 for e in acl for t in e["targets"] or [])
+    assert any(e["privilege"] == PRIVILEGE_ADMIN for e in acl)
+    managed = [e for e in acl if e["privilege"] == PRIVILEGE_VIEW]
+    assert len(managed) == 1 and managed[0]["subjects"] == [20]            # replaces the ep-361 grant
+
+
+async def test_apply_still_writes_without_parts_list(fake_client):
+    """No PartsList read -> cleanup is skipped silently, but the write still happens."""
+    fake_client.attributes[9] = {
+        "0/31/0": [
+            ADMIN,
+            {"1": 1, "2": 2, "3": [99], "4": [{"0": 1026, "1": 999}], "fabricIndex": 1},
+        ],
+    }
+    conn = make_conn(fake_client)
+    await async_apply_acl(conn, 9, 361, [20], 7)
+    acl = fake_client.attributes[9]["0/31/0"]
+    assert any(e["privilege"] == PRIVILEGE_ADMIN for e in acl)             # admin kept
+    assert await async_verify_acl(conn, 9, 361, [20], 7)                   # our grant written
+
+
+async def test_apply_rejected_write_reports_fabric_entry_count(fake_client):
+    """A device rejection carries the fabric's pre-write entry count."""
+    fake_client.attributes[9] = {"0/31/0": [ADMIN]}
+    conn = make_conn(fake_client)
+    original = fake_client.send_command
+
+    async def bad(command, **kw):
+        if command == "write_attribute" and kw.get("attribute_path") == ACL_ATTRIBUTE_PATH:
+            return [{"path": ACL_ATTRIBUTE_PATH, "status": 135}]
+        return await original(command, **kw)
+
+    fake_client.send_command = bad  # type: ignore[assignment]
+    try:
+        await async_apply_acl(conn, 9, 361, [20, 6], 7)
+        raise AssertionError("should raise")
+    except MatterCommandError as err:
+        assert "135" in str(err) and "entries before the write" in str(err)
+
+
 async def test_apply_preserves_null_subjects_and_targets(fake_client):
     """Absent/None subjects+targets survive the round-trip; other kept entries untouched."""
     fake_client.attributes[9] = {

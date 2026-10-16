@@ -17,6 +17,7 @@ from ..const import (
     PRIVILEGE_VIEW,
 )
 from .client import MatterCommandError, MatterConnection
+from . import discovery
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -192,20 +193,46 @@ async def async_apply_acl(
         for e in original
         if normalize_acl_entry(e)["fabric_index"] == our_index
     ]
-    # Replace semantics: drop any existing view grant to this sensor endpoint (e.g.
-    # from an earlier TRV set) so repeat applies never accumulate stale grants.
-    kept = [
-        e
-        for e in ours
-        if not (
-            e["privilege"] == PRIVILEGE_VIEW
-            and any(
-                t.get("cluster") == CLUSTER_TEMPERATURE_MEASUREMENT
-                and t.get("endpoint") == sensor_endpoint
-                for t in e["targets"] or []
-            )
+    # Live endpoints let us reclaim stale grants left by removed legacy scripts whose
+    # target endpoint the bridge has since renumbered away (a target naming a dead
+    # endpoint makes the device reject the whole write with CONSTRAINT_ERROR).
+    # Best-effort: if the node cannot be scanned, skip the cleanup and still apply.
+    live_endpoints: set[int] = set()
+    try:
+        live_endpoints = set(
+            (await discovery.async_scan_node(connection, sensor_node_id)).keys()
         )
-    ]
+    except Exception:  # noqa: BLE001 - cleanup must never break the apply
+        live_endpoints = set()
+
+    # Replace semantics: drop any existing view grant to this sensor endpoint (e.g.
+    # from an earlier TRV set) so repeat applies never accumulate stale grants. Also
+    # reclaim grants to endpoints that no longer exist on the node.
+    kept: list[dict] = []
+    reclaimed = 0
+    for e in ours:
+        if e["privilege"] != PRIVILEGE_VIEW:
+            kept.append(e)
+            continue
+        managed = [
+            t
+            for t in e["targets"] or []
+            if t.get("cluster") == CLUSTER_TEMPERATURE_MEASUREMENT
+        ]
+        if any(t.get("endpoint") == sensor_endpoint for t in managed):
+            continue  # replaced by the fresh grant appended below
+        if live_endpoints and any(
+            t.get("endpoint") not in live_endpoints for t in managed
+        ):
+            reclaimed += 1
+            continue  # stale grant to a dead endpoint
+        kept.append(e)
+    if reclaimed:
+        _LOGGER.info(
+            "Reclaimed %d stale ACL grant(s) to dead endpoints on node %s",
+            reclaimed,
+            sensor_node_id,
+        )
     if not any(e["privilege"] == PRIVILEGE_ADMIN for e in kept):
         raise MatterCommandError(
             "refusing ACL write: it would remove the controller's admin access"
@@ -219,7 +246,13 @@ async def async_apply_acl(
     new_list = [_to_write_entry(e, our_index) for e in kept] + [
         _to_write_entry(desired, our_index)
     ]
-    await connection.write_attribute(sensor_node_id, ACL_ATTRIBUTE_PATH, new_list)
+    try:
+        await connection.write_attribute(sensor_node_id, ACL_ATTRIBUTE_PATH, new_list)
+    except MatterCommandError as err:
+        raise MatterCommandError(
+            f"{err} (ACL for this fabric on node {sensor_node_id} held {len(ours)} "
+            "entries before the write)"
+        ) from err
 
     current = await connection.read_attribute(sensor_node_id, ACL_ATTRIBUTE_PATH) or []
     if not _admin_entries_preserved(original, current):
