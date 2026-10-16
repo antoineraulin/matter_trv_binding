@@ -10,18 +10,28 @@
       },
       "binding": {
         "title": "Bind a temperature sensor to TRVs",
+        "description": "The first picker is the temperature sensor the TRVs should follow; the second is one or more TRVs to drive. Both must already be commissioned to Matter.",
         "data": {
           "label": "Label",
           "sensor_device": "Temperature sensor (Matter device)",
           "trv_devices": "TRVs (Matter devices)"
+        },
+        "data_description": {
+          "sensor_device": "The Matter device whose temperature reading the thermostats should follow.",
+          "trv_devices": "One or more Matter thermostats (TRVs) that should use this sensor's reading."
         }
       },
       "reconfigure": {
         "title": "Reconfigure the binding",
+        "description": "Update the sensor and/or the TRV list. The changes are re-applied and verified.",
         "data": {
           "label": "Label",
           "sensor_device": "Temperature sensor (Matter device)",
           "trv_devices": "TRVs (Matter devices)"
+        },
+        "data_description": {
+          "sensor_device": "The Matter device whose temperature reading the thermostats should follow.",
+          "trv_devices": "One or more Matter thermostats (TRVs) that should use this sensor's reading."
         }
       }
     },

@@ -10,18 +10,28 @@
       },
       "binding": {
         "title": "Lier un capteur de température à des têtes thermostatiques",
+        "description": "Le premier sélecteur est le capteur de température que les têtes thermostatiques doivent suivre ; le second, la ou les têtes à piloter. Les deux doivent déjà être appairés à Matter.",
         "data": {
           "label": "Libellé",
           "sensor_device": "Capteur de température (appareil Matter)",
           "trv_devices": "Têtes thermostatiques (appareils Matter)"
+        },
+        "data_description": {
+          "sensor_device": "L'appareil Matter dont la mesure de température doit piloter les têtes.",
+          "trv_devices": "Une ou plusieurs têtes thermostatiques (TRV) Matter qui doivent utiliser la mesure de ce capteur."
         }
       },
       "reconfigure": {
         "title": "Reconfigurer la liaison",
+        "description": "Modifiez le capteur et/ou la liste des têtes. Les changements sont réappliqués et vérifiés.",
         "data": {
           "label": "Libellé",
           "sensor_device": "Capteur de température (appareil Matter)",
           "trv_devices": "Têtes thermostatiques (appareils Matter)"
+        },
+        "data_description": {
+          "sensor_device": "L'appareil Matter dont la mesure de température doit piloter les têtes.",
+          "trv_devices": "Une ou plusieurs têtes thermostatiques (TRV) Matter qui doivent utiliser la mesure de ce capteur."
         }
       }
     },
