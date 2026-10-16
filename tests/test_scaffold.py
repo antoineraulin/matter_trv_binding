@@ -9,7 +9,7 @@ def test_manifest_keys():
     manifest = json.loads((CC / "manifest.json").read_text())
     assert manifest["domain"] == "matter_trv_binding"
     assert manifest["config_flow"] is True
-    assert manifest["version"] == "0.1.2"
+    assert manifest["version"] == "0.1.3"
     assert "matter-python-client~=1.0" in manifest["requirements"]
     assert manifest["dependencies"] == []
 
