@@ -130,8 +130,8 @@ Hub options (configurable via **Configure** on the hub entry) tune the loop:
 
 ## Brand assets
 
-Brand assets (icon/logo) are **not shipped yet**; a placeholder is used in the Home Assistant UI
-until they are added under `brand/`.
+The integration ships its own icon and logo (light and dark theme variants) under
+`custom_components/matter_trv_binding/brand/`; Home Assistant picks them up automatically.
 
 ## License
 
