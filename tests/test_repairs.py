@@ -21,7 +21,8 @@ async def test_binding_repair_flow_confirm_removes_entry(hass):
     assert result["type"] == "form"
     assert any(str(key) == "confirm" for key in result["data_schema"].schema)
     assert result["description_placeholders"]["binding_name"] == entry.title
-    await flow.async_step_init({"confirm": True})
+    result = await flow.async_step_init({"confirm": True})
+    assert result["type"] == "create_entry"
     await hass.async_block_till_done()
     assert hass.config_entries.async_get_entry(entry.entry_id) is None
 

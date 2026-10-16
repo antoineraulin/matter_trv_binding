@@ -25,7 +25,8 @@ class BindingRepairFlow(RepairsFlow):
         # HA passes the issue data ({"issue_id": ...}) to the first step as
         # user_input, so only an explicit "confirm" counts as the user's answer.
         if user_input is not None and user_input.get("confirm"):
-            if entry_id:
+            # The entry may have been removed while the form was displayed.
+            if entry_id and self.hass.config_entries.async_get_entry(entry_id):
                 await self.hass.config_entries.async_remove(entry_id)
             return self.async_create_entry(data={})
 
