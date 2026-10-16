@@ -166,7 +166,13 @@ class MatterConnection:
         """Return the node's fabrics as plain dicts (the real client hands back dataclasses)."""
         if self._client is None:
             raise MatterConnectionError("not connected")
-        fabrics = await self._client.get_matter_fabrics(node_id)
+        try:
+            fabrics = await self._client.get_matter_fabrics(node_id)
+        except MatterConnectionError:
+            raise
+        except Exception as err:  # noqa: BLE001 - any client error invalidates the connection
+            self._connected = False
+            raise MatterConnectionError(str(err)) from err
         return [
             dataclasses.asdict(fabric) if dataclasses.is_dataclass(fabric) else fabric
             for fabric in fabrics
@@ -177,9 +183,12 @@ class MatterConnection:
             "write_attribute", node_id=node_id, attribute_path=attribute_path, value=value
         )
         for entry in result or []:
-            if entry.get("Status", 0) != 0:
+            # matterjs-server serializes AttributeWriteResult lowercase on the wire;
+            # accept both cases so a real device rejection is never missed.
+            status = entry.get("Status", entry.get("status", 0))
+            if status != 0:
                 raise MatterCommandError(
-                    f"write_attribute {attribute_path} failed: {entry.get('Status')}"
+                    f"write_attribute {attribute_path} failed: {status}"
                 )
 
     def _attach(self, normalized: Callable) -> None:

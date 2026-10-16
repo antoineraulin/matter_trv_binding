@@ -75,6 +75,20 @@ async def test_write_attribute_raises_on_bad_status(fake_client):
         pass
 
 
+async def test_write_attribute_raises_on_lowercase_status(fake_client):
+    """matterjs-server serializes AttributeWriteResult lowercase on the wire."""
+    conn = make_conn(fake_client)
+    await conn.async_connect()
+    async def bad(**kw):
+        return [{"path": kw["attribute_path"], "status": 1}]
+    fake_client.send_command = bad  # type: ignore[assignment]
+    try:
+        await conn.write_attribute(5, "1/513/26", 1)
+        raise AssertionError("should raise")
+    except MatterCommandError:
+        pass
+
+
 async def test_subscribe_roundtrip(fake_client):
     conn = make_conn(fake_client)
     await conn.async_connect()

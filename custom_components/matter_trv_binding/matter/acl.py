@@ -37,29 +37,44 @@ def _normalize_target(target: dict) -> dict:
 
 
 def normalize_acl_entry(entry: dict) -> dict:
-    """Return an ACL entry with named keys, regardless of how it was spelled."""
+    """Return an ACL entry with named keys, regardless of how it was spelled.
+
+    ``subjects`` and ``targets`` stay ``None`` when the raw field is ``None`` or
+    absent (real admin entries often omit both); an explicit empty list stays ``[]``.
+    Consumers that need to iterate must coerce with ``or []``.
+    """
+    subjects = entry.get("subjects", entry.get("3"))
+    targets = entry.get("targets", entry.get("4"))
     return {
         "privilege": entry.get("privilege", entry.get("1")),
         "auth_mode": entry.get("auth_mode", entry.get("authMode", entry.get("2"))),
-        "subjects": list(entry.get("subjects", entry.get("3", [])) or []),
-        "targets": [_normalize_target(t) for t in (entry.get("targets", entry.get("4", [])) or [])],
+        "subjects": None if subjects is None else list(subjects),
+        "targets": None if targets is None else [_normalize_target(t) for t in targets],
         "fabric_index": entry.get("fabricIndex", entry.get("254")),
     }
 
 
 def _to_write_entry(entry: dict, fabric_index: int) -> dict:
-    """Render a normalized entry as the device's AccessControl write shape (camelCase)."""
+    """Render a normalized entry as the device's AccessControl write shape (camelCase).
+
+    ``subjects``/``targets`` keep ``None`` so an admin entry written back is byte-for-byte
+    the same as the device reported it (a device rejects or silently neuters a null-vs-[] swap).
+    """
+    subjects = entry["subjects"]
+    targets = entry["targets"]
     return {
         "privilege": entry["privilege"],
         "authMode": entry["auth_mode"],
-        "subjects": list(entry["subjects"]),
-        "targets": [
+        "subjects": None if subjects is None else list(subjects),
+        "targets": None
+        if targets is None
+        else [
             {
                 "cluster": t.get("cluster"),
                 "endpoint": t.get("endpoint"),
                 "deviceType": t.get("device_type"),
             }
-            for t in entry["targets"]
+            for t in targets
         ],
         "fabricIndex": fabric_index,
     }
@@ -70,11 +85,11 @@ def acl_entry_grants(
 ) -> bool:
     """True iff the entry grants every requested subject access to (cluster, endpoint)."""
     normalized = normalize_acl_entry(entry)
-    if not set(subjects).issubset(normalized["subjects"]):
+    if not set(subjects).issubset(normalized["subjects"] or []):
         return False
     return any(
         target["cluster"] == cluster and target["endpoint"] == endpoint
-        for target in normalized["targets"]
+        for target in normalized["targets"] or []
     )
 
 
@@ -123,9 +138,9 @@ async def async_verify_acl(
         if any(
             target["cluster"] == CLUSTER_TEMPERATURE_MEASUREMENT
             and target["endpoint"] == sensor_endpoint
-            for target in normalized["targets"]
+            for target in normalized["targets"] or []
         ):
-            granted.update(normalized["subjects"])
+            granted.update(normalized["subjects"] or [])
     return set(trv_node_ids).issubset(granted)
 
 
@@ -187,7 +202,7 @@ async def async_apply_acl(
             and any(
                 t.get("cluster") == CLUSTER_TEMPERATURE_MEASUREMENT
                 and t.get("endpoint") == sensor_endpoint
-                for t in e["targets"]
+                for t in e["targets"] or []
             )
         )
     ]

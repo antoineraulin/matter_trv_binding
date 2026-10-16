@@ -16,6 +16,11 @@ def make_conn(fake_client):
 
 ADMIN = {"1": 5, "2": 2, "3": [99], "4": [], "fabricIndex": 1}   # TLV-keyed admin entry (controller)
 OUR_TL = {"1": 1, "2": 2, "3": [20, 6], "4": [{"0": 1026, "1": 361}], "fabricIndex": 1}
+# Real controller admin entries commonly omit both: absent (TLV) and explicit None.
+NULL_ADMIN_TLV = {"1": 5, "2": 2, "fabricIndex": 1}
+NULL_ADMIN_NAMED = {"privilege": 5, "authMode": 2, "subjects": None, "targets": None, "fabricIndex": 1}
+# A view grant that is NOT our managed sensor grant -> must be kept untouched.
+OTHER_VIEW = {"1": 1, "2": 2, "3": [42], "4": [{"0": 513, "1": 1}], "fabricIndex": 1}
 
 
 def test_normalize_tlv_keys():
@@ -85,6 +90,31 @@ async def test_apply_replaces_our_managed_grant(fake_client):
     managed = [e for e in acl if e["privilege"] == PRIVILEGE_VIEW]
     assert len(managed) == 1
     assert managed[0]["subjects"] == [20, 6, 7]
+
+
+async def test_apply_preserves_null_subjects_and_targets(fake_client):
+    """Absent/None subjects+targets survive the round-trip; other kept entries untouched."""
+    fake_client.attributes[9] = {
+        "0/31/0": [NULL_ADMIN_TLV, NULL_ADMIN_NAMED, OTHER_VIEW]
+    }
+    conn = make_conn(fake_client)
+    await async_apply_acl(conn, 9, 361, [20, 6], 7)
+    acl = fake_client.attributes[9]["0/31/0"]
+    assert acl[0]["subjects"] is None and acl[0]["targets"] is None   # TLV absent -> None
+    assert acl[1]["subjects"] is None and acl[1]["targets"] is None   # explicit None
+    assert acl[2]["subjects"] == [42]                                 # kept view grant untouched
+    assert acl[2]["targets"][0]["cluster"] == 513
+
+
+async def test_verify_handles_null_subjects(fake_client):
+    """A null-subjects entry grants nothing; a proper grant still verifies."""
+    fake_client.attributes[9] = {
+        "0/31/0": [{"1": 1, "2": 2, "3": None, "4": None, "fabricIndex": 1}]
+    }
+    conn = make_conn(fake_client)
+    assert await async_verify_acl(conn, 9, 361, [20, 6], 7) is False
+    fake_client.attributes[9]["0/31/0"].append(OUR_TL)
+    assert await async_verify_acl(conn, 9, 361, [20, 6], 7) is True
 
 
 async def test_apply_refuses_without_admin(fake_client):
