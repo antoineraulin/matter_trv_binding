@@ -35,7 +35,8 @@
     },
     "abort": {
       "already_configured": "A Matter TRV Binding connection already exists.",
-      "already_configured_sensor": "A binding for this sensor already exists."
+      "already_configured_sensor": "A binding for this sensor already exists.",
+      "reconfigure_successful": "The binding was reconfigured."
     }
   },
   "options": {

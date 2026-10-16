@@ -36,6 +36,8 @@ async def test_hub_options_updates_interval_and_reloads_bindings(hass, fake_clie
     # binding entry was reloaded so the coordinator picked up the new interval
     assert binding.state is ConfigEntryState.LOADED
     assert binding.runtime_data.coordinator.update_interval == timedelta(minutes=15)
+    # the rebuilt coordinator captured the hub's *current* runtime, not the stale one
+    assert binding.runtime_data.coordinator._connection is hub.runtime_data.connection
 
 
 async def test_binding_reconfigure_changes_trv_list(hass, fake_client, matter_devices):

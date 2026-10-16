@@ -21,6 +21,7 @@ from .const import (
     OPT_REPAIR_ATTEMPTS,
     OPT_UPDATE_INTERVAL_MINUTES,
 )
+from .hub import get_hub_entry
 
 _OPTIONS_SCHEMA = vol.Schema(
     {
@@ -36,7 +37,13 @@ _OPTIONS_SCHEMA = vol.Schema(
 
 
 class MatterTrvBindingOptionsFlowHandler(OptionsFlowWithReload):
-    """Hub options; the hub entry itself is reloaded by OptionsFlowWithReload."""
+    """Hub options; hub and bindings are reloaded in a fixed order (see below)."""
+
+    # The flow manager still applies the new options (async_finish_flow writes them
+    # with async_update_entry before checking this flag); disabling only suppresses
+    # its eager async_schedule_reload, so the hub is reloaded by our ordered task
+    # instead of racing the binding reloads.
+    automatic_reload = False
 
     def __init__(self, config_entry: ConfigEntry) -> None:
         self._entry = config_entry
@@ -74,7 +81,8 @@ class MatterTrvBindingOptionsFlowHandler(OptionsFlowWithReload):
         # Binding coordinators read the interval/repair options only at creation, so
         # they must reload to pick up the new values. Lazy task: the flow manager
         # applies the new options only after this returns, so an eager task would
-        # reload against the old values.
+        # reload against the old values. The task reloads the hub first, awaited, so
+        # every rebuilt binding coordinator captures the hub's new runtime data.
         self.hass.async_create_task(
             self._async_reload_binding_entries(), eager_start=False
         )
@@ -86,6 +94,12 @@ class MatterTrvBindingOptionsFlowHandler(OptionsFlowWithReload):
         )
 
     async def _async_reload_binding_entries(self) -> None:
+        # The hub goes first, awaited: a binding rebuild reads the hub's runtime data
+        # at creation, so reloading it before the hub would either capture the old
+        # connection or re-setup inside the hub's unloaded window (ConfigEntryNotReady).
+        hub = get_hub_entry(self.hass)
+        if hub is not None:
+            await self.hass.config_entries.async_reload(hub.entry_id)
         for entry in self.hass.config_entries.async_entries(DOMAIN):
             if entry.unique_id != HUB_UNIQUE_ID:
                 await self.hass.config_entries.async_reload(entry.entry_id)
