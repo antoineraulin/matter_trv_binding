@@ -2,6 +2,7 @@
 import pytest
 import pytest_homeassistant_custom_component  # noqa: F401  registers HA fixtures
 from homeassistant.helpers import device_registry as dr
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from tests.fake_matter import FakeMatterClient
 
@@ -32,6 +33,8 @@ class MatterDeviceFactory:
 
     def __init__(self, hass) -> None:
         self._hass = hass
+        # HA validates registry links: the matter device needs an existing entry
+        MockConfigEntry(domain="matter", entry_id="matter_test_entry").add_to_hass(hass)
 
     def create(self, name: str, node_id: int, postfix: str = "MatterNodeDevice"):
         registry = dr.async_get(self._hass)

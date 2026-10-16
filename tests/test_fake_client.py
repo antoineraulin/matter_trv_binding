@@ -16,3 +16,8 @@ async def test_fail_nodes_raise():
         raise AssertionError("should have raised")
     except ConnectionError:
         pass
+
+
+async def test_device_factory_creates_device(hass, matter_devices):
+    dev = matter_devices.create("Eve Thermo Bureau", 20)
+    assert dev.id
