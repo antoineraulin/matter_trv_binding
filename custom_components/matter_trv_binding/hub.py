@@ -9,7 +9,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN, HUB_UNIQUE_ID
 from .matter import client as matter_client
-from .matter.client import MatterConnection, MatterConnectionError
+from .matter.client import MatterConnection, MatterConnectionError, MatterServerTooOldError
 
 
 @dataclass
@@ -39,6 +39,8 @@ async def async_create_connection(hass: HomeAssistant, url: str) -> MatterConnec
     )
     try:
         await connection.async_connect()
+    except MatterServerTooOldError:
+        raise
     except MatterConnectionError as err:
         raise ConfigEntryNotReady(f"cannot connect to {url}") from err
     return connection

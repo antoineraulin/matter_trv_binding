@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Any, Callable
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from matter_server.client.exceptions import ServerVersionTooOld
 
 _INIT_READY_TIMEOUT = 30  # seconds to wait for the real client to finish connecting
 _MIN_RETRY_DELAY = 5
@@ -20,6 +21,10 @@ _MAX_RETRY_DELAY = 300
 
 class MatterConnectionError(Exception):
     """Raised when the connection to the Matter server fails."""
+
+
+class MatterServerTooOldError(MatterConnectionError):
+    """The server's schema is below the client's floor."""
 
 
 class MatterCommandError(Exception):
@@ -93,6 +98,10 @@ class MatterConnection:
             await client.connect()
             await self._start_listening(client)
             info = await self._get_server_info(client)
+        except ServerVersionTooOld as err:
+            # The client's own refusal: precise, unlike any schema heuristic.
+            self._connected = False
+            raise MatterServerTooOldError(str(err)) from err
         except Exception as err:  # noqa: BLE001 - any failure is a connection failure
             self._connected = False
             raise MatterConnectionError(str(err)) from err

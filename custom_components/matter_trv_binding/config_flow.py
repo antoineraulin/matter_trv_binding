@@ -22,16 +22,17 @@ from .hub import async_create_connection, get_hub_entry
 from .options_flow import MatterTrvBindingOptionsFlowHandler
 from .matter.acl import async_apply_acl, async_verify_acl
 from .matter.bindings import async_apply_trv, async_check_trv
-from .matter.client import MatterCommandError, MatterConnectionError
+from .matter.client import (
+    MatterCommandError,
+    MatterConnectionError,
+    MatterServerTooOldError,
+)
 from .matter.discovery import (
     DeviceMissingError,
     MatterDevice,
     NodeUnreachableError,
     async_resolve_device,
 )
-
-# matterjs-server schema the fake pins as supported; the client's own floor is 11.
-_SUPPORTED_SCHEMA_VERSION = 19
 
 # Keys of the validation result that are translation placeholders, not error ids.
 _PLACEHOLDER_KEYS = ("devices", "detail", "url")
@@ -121,15 +122,13 @@ class MatterTrvBindingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         try:
             connection = await async_create_connection(self.hass, user_input["url"])
+        except MatterServerTooOldError:
+            errors["base"] = "legacy_server"
         except (MatterConnectionError, ConfigEntryNotReady):
             # async_create_connection wraps connect failures in ConfigEntryNotReady.
             errors["base"] = "cannot_connect"
         else:
-            info = connection.server_info or {}
             await connection.async_close()
-            schema_version = info.get("schema_version")
-            if isinstance(schema_version, int) and schema_version < _SUPPORTED_SCHEMA_VERSION:
-                errors["base"] = "legacy_server"
 
         if errors:
             return self.async_show_form(

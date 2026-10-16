@@ -1,5 +1,7 @@
+from matter_server.client.exceptions import ServerVersionTooOld
+
 from custom_components.matter_trv_binding.matter.client import (
-    MatterCommandError, MatterConnection, MatterConnectionError,
+    MatterCommandError, MatterConnection, MatterConnectionError, MatterServerTooOldError,
 )
 
 
@@ -21,6 +23,20 @@ async def test_connect_failure_raises(fake_client):
         await conn.async_connect()
         raise AssertionError("should raise")
     except MatterConnectionError:
+        pass
+
+
+async def test_connect_server_version_too_old(fake_client):
+    async def too_old():
+        raise ServerVersionTooOld("schema 12 below client floor 13")
+
+    fake_client.connect = too_old  # type: ignore[method-assign]
+    conn = make_conn(fake_client)
+    assert issubclass(MatterServerTooOldError, MatterConnectionError)
+    try:
+        await conn.async_connect()
+        raise AssertionError("should raise")
+    except MatterServerTooOldError:
         pass
 
 

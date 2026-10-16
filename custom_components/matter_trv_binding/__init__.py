@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryError
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
@@ -11,6 +11,7 @@ from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN, HUB_UNIQUE_ID, PLATFORMS
 from .coordinator import BindingCoordinator
 from .hub import HubRuntimeData, async_create_connection, get_hub_entry
+from .matter.client import MatterServerTooOldError
 from .services import SERVICE_REPAIR, async_register_services
 
 
@@ -27,7 +28,14 @@ type MatterTrvBindingConfigEntry = ConfigEntry[HubRuntimeData | BindingRuntimeDa
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the hub or a binding entry."""
     if entry.unique_id == HUB_UNIQUE_ID:
-        connection = await async_create_connection(hass, entry.data["url"])
+        try:
+            connection = await async_create_connection(hass, entry.data["url"])
+        except MatterServerTooOldError as err:
+            # Permanent: retrying cannot age the server forward.
+            raise ConfigEntryError(
+                "The Matter server is too old for the installed client; "
+                "update to the Matter Server add-on 9.x or newer."
+            ) from err
         entry.runtime_data = HubRuntimeData(connection=connection, repair_counts={})
         await async_register_services(hass)
         entry.async_on_unload(
