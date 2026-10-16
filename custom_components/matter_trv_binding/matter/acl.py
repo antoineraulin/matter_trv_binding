@@ -99,23 +99,18 @@ def desired_acl_entry(
 ) -> dict:
     """Build the ACL entry granting ``subjects`` view access to one target.
 
-    Both ``device_type`` and ``deviceType`` are emitted for cross-generation
-    safety: v1.4.0's target map reads only ``device_type`` (the camelCase key is
-    ignored), but an earlier matter.js generation relied on ``deviceType``. The
-    requirement for this server generation is that ``device_type`` be present.
+    The target is endpoint-scoped only: a Matter ACL target must not combine a
+    concrete endpoint with a device type ("DeviceType and Endpoint are mutually
+    exclusive" — the device enforces this and rejects the write), and a concrete
+    endpoint is the narrower, correct grant. ``device_type`` is kept in the
+    signature for interface stability (coordinator/flow/tests pass it) but is not
+    emitted.
     """
     return {
         "privilege": PRIVILEGE_VIEW,
         "auth_mode": AUTH_MODE_CASE,
         "subjects": list(subjects),
-        "targets": [
-            {
-                "cluster": cluster,
-                "endpoint": endpoint,
-                "device_type": device_type,
-                "deviceType": device_type,
-            }
-        ],
+        "targets": [{"cluster": cluster, "endpoint": endpoint}],
     }
 
 

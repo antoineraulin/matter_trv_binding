@@ -41,10 +41,10 @@ def test_grants_requires_all_subjects_and_target():
     assert not acl_entry_grants(OUR_TL, [20, 6], CLUSTER_TEMPERATURE_MEASUREMENT, 999)
 
 
-def test_desired_entry_both_spellings():
+def test_desired_entry_endpoint_scoped_target():
+    """Target is endpoint-scoped; no device_type/deviceType (mutually exclusive)."""
     entry = desired_acl_entry([20, 6], CLUSTER_TEMPERATURE_MEASUREMENT, 361, 7)
-    target = entry["targets"][0]
-    assert target["device_type"] == 7 and target["deviceType"] == 7
+    assert entry["targets"] == [{"cluster": 1026, "endpoint": 361}]
     assert entry["privilege"] == 1 and entry["auth_mode"] == 2
 
 
@@ -144,6 +144,34 @@ async def test_apply_rejected_write_reports_fabric_entry_count(fake_client):
         raise AssertionError("should raise")
     except MatterCommandError as err:
         assert "135" in str(err) and "entries before the write" in str(err)
+
+
+async def test_apply_never_writes_endpoint_and_device_type_together(fake_client):
+    """Device rule: no written ACL target may carry both a non-null endpoint and deviceType."""
+    fake_client.attributes[9] = {
+        "0/31/0": [
+            ADMIN,                                            # kept admin, targets []
+            OTHER_VIEW,                                       # kept (cluster 513)
+            {  # kept device-type-only grant: endpoint None, deviceType 7 -> still valid
+                "1": 1, "2": 2, "3": [42],
+                "4": [{"0": 1026, "1": None, "2": 7}], "fabricIndex": 1,
+            },
+        ],
+    }
+    conn = make_conn(fake_client)
+    await async_apply_acl(conn, 9, 361, [20, 6], 7)
+    written = next(
+        kw["value"]
+        for cmd, kw in reversed(fake_client.commands)
+        if cmd == "write_attribute" and kw.get("attribute_path") == ACL_ATTRIBUTE_PATH
+    )
+    assert written  # the write happened
+    for entry in written:
+        for target in entry["targets"] or []:
+            assert not (
+                target.get("endpoint") is not None
+                and target.get("deviceType") is not None
+            ), target
 
 
 async def test_apply_preserves_null_subjects_and_targets(fake_client):
