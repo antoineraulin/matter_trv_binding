@@ -1,0 +1,4 @@
+repair:
+  target:
+    device:
+      integration: matter_trv_binding

@@ -11,6 +11,7 @@ from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN, HUB_UNIQUE_ID, PLATFORMS
 from .coordinator import BindingCoordinator
 from .hub import HubRuntimeData, async_create_connection, get_hub_entry
+from .services import SERVICE_REPAIR, async_register_services
 
 
 @dataclass
@@ -28,6 +29,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.unique_id == HUB_UNIQUE_ID:
         connection = await async_create_connection(hass, entry.data["url"])
         entry.runtime_data = HubRuntimeData(connection=connection, repair_counts={})
+        await async_register_services(hass)
+        entry.async_on_unload(
+            lambda: hass.services.async_remove(DOMAIN, SERVICE_REPAIR)
+        )
         return True
 
     hub = get_hub_entry(hass)
