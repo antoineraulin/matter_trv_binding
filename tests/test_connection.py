@@ -64,6 +64,32 @@ async def test_subscribe_roundtrip(fake_client):
     assert len(events) == 1 and events[0][1]["node_id"] == 5
 
 
+async def test_subscribe_survives_real_scalar_payload(fake_client):
+    """The real client signals (EventType, bare_value); a scalar payload must pass
+    through the wrapper's enum normalization untouched."""
+    from matter_server.common.models import EventType
+
+    conn = make_conn(fake_client)
+    await conn.async_connect()
+    events = []
+    conn.subscribe(lambda et, data: events.append((et, data)))
+    fake_client.emit_event(EventType.ATTRIBUTE_UPDATED, 21.5)   # real contract
+    assert events == [("attribute_updated", 21.5)]
+
+
+async def test_close_prevents_reconnect(fake_client):
+    conn = make_conn(fake_client)
+    await conn.async_connect()
+    await conn.async_close()
+    assert not fake_client.connected
+    try:
+        await conn.async_ensure_connected()
+        raise AssertionError("should raise")
+    except MatterConnectionError:
+        pass
+    assert not fake_client.connected   # never revived on its own
+
+
 from tests.fake_matter import FakeMatterClient
 
 

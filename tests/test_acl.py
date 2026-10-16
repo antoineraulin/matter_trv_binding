@@ -43,6 +43,19 @@ async def test_verify_true_when_granted(fake_client):
     assert await async_verify_acl(conn, 9, 361, [20, 7], 7) is False
 
 
+async def test_verify_true_when_subjects_spread_across_entries(fake_client):
+    """Matter only needs each TRV granted by SOME entry, so the union counts."""
+    fake_client.attributes[9] = {
+        "0/31/0": [
+            ADMIN,
+            {"1": 1, "2": 2, "3": [20], "4": [{"0": 1026, "1": 361}]},
+            {"1": 1, "2": 2, "3": [6], "4": [{"0": 1026, "1": 361}]},
+        ]
+    }
+    conn = make_conn(fake_client)
+    assert await async_verify_acl(conn, 9, 361, [20, 6], 7) is True
+
+
 async def test_apply_adds_entry_and_passes_safety(fake_client):
     fake_client.attributes[9] = {"0/31/0": [ADMIN]}
     conn = make_conn(fake_client)

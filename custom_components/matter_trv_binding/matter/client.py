@@ -42,6 +42,7 @@ class MatterConnection:
         self._client: Any | None = None
         self._listen_task: asyncio.Task | None = None
         self._connected = False
+        self._closed = False
         self._retry_delay = _MIN_RETRY_DELAY
         self.server_info: dict = {}
         # Subscription intents (normalized callbacks) live on the wrapper, not the
@@ -97,13 +98,20 @@ class MatterConnection:
             raise MatterConnectionError(str(err)) from err
         self._client = client
         self._connected = True
+        self._closed = False
         self._retry_delay = _MIN_RETRY_DELAY
         self.server_info = info
         self._reattach_subscriptions()
         return info
 
     async def async_ensure_connected(self) -> None:
-        """No-op when connected, otherwise reconnect immediately."""
+        """No-op when connected, otherwise reconnect immediately.
+
+        A wrapper that was explicitly closed never revives on its own: a binding
+        coordinator must not reopen a connection the hub has torn down.
+        """
+        if self._closed:
+            raise MatterConnectionError("connection was closed")
         if self._is_client_connected():
             self._connected = True
             return
@@ -126,6 +134,7 @@ class MatterConnection:
             elif hasattr(self._client, "disconnect"):
                 await self._client.disconnect()
         self._connected = False
+        self._closed = True
 
     async def send_command(self, command: str, **kwargs: Any) -> Any:
         if self._client is None:
@@ -169,7 +178,7 @@ class MatterConnection:
         for normalized in self._subscriptions:
             self._attach(normalized)
 
-    def subscribe(self, callback: Callable[[str, dict], None]) -> Callable[[], None]:
+    def subscribe(self, callback: Callable[[str, Any], None]) -> Callable[[], None]:
         """Subscribe to server events; returns a plain unsubscribe callable.
 
         Safe before connect: the intent is recorded and attached once a client exists.

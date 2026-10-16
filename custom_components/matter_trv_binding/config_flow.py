@@ -34,7 +34,7 @@ from .matter.discovery import (
 _SUPPORTED_SCHEMA_VERSION = 19
 
 # Keys of the validation result that are translation placeholders, not error ids.
-_PLACEHOLDER_KEYS = ("devices", "detail")
+_PLACEHOLDER_KEYS = ("devices", "detail", "url")
 
 _HUB_SCHEMA = vol.Schema(
     {
@@ -132,7 +132,12 @@ class MatterTrvBindingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "legacy_server"
 
         if errors:
-            return self.async_show_form(step_id="hub", data_schema=_HUB_SCHEMA, errors=errors)
+            return self.async_show_form(
+                step_id="hub",
+                data_schema=_HUB_SCHEMA,
+                errors=errors,
+                description_placeholders={"url": user_input["url"]},
+            )
         return self.async_create_entry(
             title=user_input["name"],
             data={"name": user_input["name"], "url": user_input["url"]},
@@ -224,7 +229,10 @@ class MatterTrvBindingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         hub = get_hub_entry(self.hass)
         if hub is None or getattr(hub, "runtime_data", None) is None:
-            return {"base": "cannot_connect"}
+            return {
+                "base": "cannot_connect",
+                "url": (hub.data.get("url") if hub is not None else None) or "-",
+            }
         connection = hub.runtime_data.connection
 
         try:
@@ -260,11 +268,17 @@ class MatterTrvBindingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         trv_node_ids = [trv.node_id for trv in resolved_trvs]
         device_type = sensor.device_types[0] if sensor.device_types else 0
         try:
-            await async_apply_acl(
+            # Read-before-write: leave an already-applied binding untouched so a
+            # re-run never appends a duplicate ACL entry.
+            if not await async_verify_acl(
                 connection, sensor.node_id, sensor.endpoint, trv_node_ids, device_type
-            )
+            ):
+                await async_apply_acl(
+                    connection, sensor.node_id, sensor.endpoint, trv_node_ids, device_type
+                )
             for trv in resolved_trvs:
-                await async_apply_trv(connection, trv, sensor)
+                if await async_check_trv(connection, trv, sensor) is not TrvStatus.BOUND:
+                    await async_apply_trv(connection, trv, sensor)
             if not await async_verify_acl(
                 connection, sensor.node_id, sensor.endpoint, trv_node_ids, device_type
             ):

@@ -17,7 +17,7 @@ from homeassistant.helpers.device_registry import DeviceEntry
 from .const import HUB_UNIQUE_ID
 from .hub import get_hub_entry
 
-TO_REDACT = {"node_id", "fabric_id", "url"}
+TO_REDACT = {"node_id", "fabric_id", "compressed_fabric_id", "url"}
 
 
 def _hub_server_info(hass: HomeAssistant, entry: ConfigEntry) -> dict:

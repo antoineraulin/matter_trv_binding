@@ -1493,3 +1493,7 @@ async def test_diagnostics_redacts_node_ids(hass, fake_client, matter_devices):
 - [x] **Step 7: Full suite** — `python -m pytest tests/ -q` → all PASS. Fix anything broken by later tasks' changes.
 - [x] **Step 8: Final self-check** — `python -c "import json,glob; [json.load(open(p)) for p in glob.glob('custom_components/**/*.json', recursive=True)]"` (all JSON parses) and grep the code for `hass.data[` (must be zero hits) and for `from homeassistant.components.matter` (must be zero hits outside comments).
 - [x] **Step 9: Commit** — `git add -A && git commit -m "feat: diagnostics, french translations, documentation"`
+
+## Post-execution corrections (2026-10-16)
+- Task 9's fast-path event test (`fake_client.emit_event("attribute_updated", {"node_id": 20})`) encoded a payload shape the real `matter-python-server`/`matterjs-server` client does not send (the callback receives the bare attribute value; node filtering is done client-side by subscription keys). The coordinator now treats any matching event as a debounced refresh trigger; see coordinator.py's `shortcut:` comment and the real-shape tests in test_connection.py / test_coordinator.py.
+- Task 4's PartsList attribute path: `0/29/3` (Descriptor 0x0003), not `0/29/0`.

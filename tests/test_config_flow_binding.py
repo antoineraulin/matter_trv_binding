@@ -34,6 +34,22 @@ async def test_binding_flow_creates_entry(hass, fake_client, matter_devices):
     assert fake_client.attributes[20]["1/513/26"] == 1
 
 
+async def test_binding_flow_is_idempotent_when_already_applied(hass, fake_client, matter_devices):
+    await setup_hub(hass)
+    seed_healthy(fake_client)                     # ACL grant, binding and sensing already correct
+    sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
+    trv = matter_devices.create("Eve Thermo Bureau", 20)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"label": "Bureau", "sensor_device": sensor.id, "trv_devices": [trv.id]},
+    )
+    await hass.async_block_till_done()
+    assert result["type"] == "create_entry"
+    # nothing was re-applied: the sensor ACL still holds exactly admin + our grant
+    assert len(fake_client.attributes[9]["0/31/0"]) == 2
+
+
 async def test_binding_flow_rejects_non_sensor(hass, fake_client, matter_devices):
     await setup_hub(hass)
     seed_healthy(fake_client)

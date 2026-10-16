@@ -30,6 +30,7 @@ async def test_hub_flow_cannot_connect_shows_error(hass, fake_client):
         result["flow_id"], {"name": "Matter", "url": "ws://localhost:5580/ws"}
     )
     assert result["type"] == "form" and result["errors"] == {"base": "cannot_connect"}
+    assert result["description_placeholders"]["url"] == "ws://localhost:5580/ws"
 
 
 async def test_hub_flow_legacy_server_shows_error(hass, fake_client):

@@ -2,14 +2,15 @@
 
 Each update cycle re-resolves the sensor and every TRV, verifies the sensor's ACL
 and each TRV's binding, repairs whatever drifted (when enabled), and reports the
-result as :class:`BindingData`. A hub event for a known TRV node triggers a
-debounced refresh so an out-of-band change is healed without waiting a full poll.
+result as :class:`BindingData`. A hub event triggers a debounced refresh so an
+out-of-band change is healed without waiting a full poll.
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any, Callable
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
@@ -34,12 +35,13 @@ from .const import (
 from .hub import HubRuntimeData
 from .matter.acl import async_apply_acl, async_verify_acl
 from .matter.bindings import async_apply_trv, async_check_trv
-from .matter.client import MatterCommandError, MatterConnectionError
+from .matter.client import MatterCommandError, MatterConnection, MatterConnectionError
 from .matter.discovery import (
     DeviceMissingError,
     MatterDevice,
     NodeUnreachableError,
     async_resolve_device,
+    parse_matter_node_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -85,6 +87,7 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
             ),
         )
         self.entry = entry
+        self._hub_entry = hub_entry
         self._auto_repair = options.get(OPT_AUTO_REPAIR, DEFAULT_AUTO_REPAIR)
         self._repair_attempts = options.get(
             OPT_REPAIR_ATTEMPTS, DEFAULT_REPAIR_ATTEMPTS
@@ -93,24 +96,58 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
         self._connection = self._runtime.connection
         self.node_changes: list[tuple[str, int, int]] = []
         self._last_node_ids: dict[str, int] = {}
-        self._known_trv_nodes: set[int] = set()
         self._trv_failures: dict[str, int] = {}      # device_id -> consecutive failures
         self._binding_failures = 0                   # binding-level consecutive failures
-        self._unsub = self._connection.subscribe(self._on_matter_event)
-        entry.async_on_unload(self._unsub)
+        # A hub reload swaps the connection object under a still-loaded binding entry;
+        # track which one the event handler is attached to so the cycle can re-point it.
+        self._subscribed_connection = self._connection
+        self._unsubscribers: list[Callable[[], None]] = []
+        self._subscribe_to(self._connection)
+        entry.async_on_unload(self._unsubscribe_all)
+
+    def _subscribe_to(self, connection: MatterConnection) -> None:
+        """Attach the event handler to ``connection`` and remember the unsubscribe."""
+        self._subscribed_connection = connection
+        self._unsubscribers.append(connection.subscribe(self._on_matter_event))
+
+    def _unsubscribe_all(self) -> None:
+        for unsubscribe in self._unsubscribers:
+            unsubscribe()
+        self._unsubscribers.clear()
 
     async def _async_update_data(self) -> BindingData:
         """Run one verify+repair cycle over the whole binding."""
+        hub_runtime = getattr(self._hub_entry, "runtime_data", None)
+        if hub_runtime is None or getattr(hub_runtime, "connection", None) is None:
+            raise UpdateFailed("Matter TRV Binding hub is not available")
+        connection = hub_runtime.connection
         try:
-            await self._connection.async_ensure_connected()
+            await connection.async_ensure_connected()
         except MatterConnectionError as err:
             raise UpdateFailed(str(err)) from err
+        # The hub may have been reloaded while this binding entry stayed loaded: run
+        # the whole cycle on the live connection and re-point the event subscription.
+        self._runtime = hub_runtime
+        self._connection = connection
+        if connection is not self._subscribed_connection:
+            self._subscribe_to(connection)
 
         entry = self.entry
         label = entry.data.get("label") or entry.title or entry.entry_id
         trv_device_ids = list(entry.data["trv_device_ids"])
 
-        sensor: MatterDevice | None
+        # ACL subjects come from ALL configured TRVs (via their registry node ids), not
+        # just the reachable subset, so a flapping TRV never leaves a stale subset entry.
+        registry = dr.async_get(self.hass)
+        subjects: list[int] = []
+        for device_id in trv_device_ids:
+            device_entry = registry.async_get(device_id)
+            node_id = parse_matter_node_id(device_entry) if device_entry else None
+            if node_id is not None:
+                subjects.append(node_id)
+
+        sensor: MatterDevice | None = None
+        sensor_device_missing = False
         try:
             sensor = await async_resolve_device(
                 self._connection,
@@ -118,8 +155,10 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
                 entry.data["sensor_device_id"],
                 CLUSTER_TEMPERATURE_MEASUREMENT,
             )
-        except (DeviceMissingError, NodeUnreachableError):
-            sensor = None
+        except DeviceMissingError:
+            sensor_device_missing = True
+        except NodeUnreachableError:
+            pass
 
         resolved: dict[str, MatterDevice] = {}
         failed: dict[str, TrvStatus] = {}
@@ -136,10 +175,14 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
         # shortcut: endpoints are re-resolved every cycle (no cache) — costs a few
         # descriptor reads per poll; upgrade: cache per node_id if polling ever moves
         # below one minute.
-        self._known_trv_nodes = {device.node_id for device in resolved.values()}
 
-        if sensor is not None and resolved:
-            await self._verify_acl(sensor, [d.node_id for d in resolved.values()])
+        # Track node-id changes on the sensor too (mirrors the per-TRV tracking).
+        if sensor is not None:
+            self._track_node_change(sensor)
+
+        acl_ok = False
+        if sensor is not None and subjects:
+            acl_ok = await self._verify_acl(sensor, subjects)
 
         sensor_ok = sensor is not None
         trvs: dict[str, TrvState] = {}
@@ -150,14 +193,34 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
                     device_id, failed[device_id], label
                 )
                 continue
-            trvs[device_id] = await self._verify_trv(device, sensor, sensor_ok)
+            trvs[device_id] = await self._verify_trv(device, sensor, sensor_ok, acl_ok)
 
-        # Clear a stale missing-device issue only when nothing is missing this cycle;
-        # deleting it inside the loop would drop the warning in mixed bindings.
-        if not any(s.status is TrvStatus.DEVICE_MISSING for s in trvs.values()):
-            ir.async_delete_issue(
-                self.hass, DOMAIN, f"device_missing_{entry.entry_id}"
+        # A gone sensor device is permanent (registry entry removed); a transient
+        # unreachable node is not, so only the former raises the fixable issue.
+        if sensor_device_missing:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                f"device_missing_{entry.entry_id}",
+                is_fixable=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="device_missing",
+                translation_placeholders={
+                    "device_name": self._device_name(
+                        entry.data["sensor_device_id"], None
+                    ),
+                    "binding_name": label,
+                },
+                data={"entry_id": entry.entry_id},
             )
+
+        # Clear a stale missing-device issue only when the sensor resolved and nothing
+        # else is missing this cycle; deleting inside the loop would drop the warning
+        # in mixed bindings.
+        if sensor is not None and not any(
+            s.status is TrvStatus.DEVICE_MISSING for s in trvs.values()
+        ):
+            ir.async_delete_issue(self.hass, DOMAIN, f"device_missing_{entry.entry_id}")
 
         self._sync_repair_failed_issue(label, trvs)
 
@@ -173,7 +236,7 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
 
     async def _verify_acl(
         self, sensor: MatterDevice, trv_node_ids: list[int]
-    ) -> None:
+    ) -> bool:
         device_type = sensor.device_types[0] if sensor.device_types else 0
         try:
             acl_ok = await async_verify_acl(
@@ -202,9 +265,14 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
             # A rolled-back ACL write (lockout guard) is a failed repair, not a crash.
             acl_ok = False
         self._binding_failures = 0 if acl_ok else self._binding_failures + 1
+        return acl_ok
 
     async def _verify_trv(
-        self, device: MatterDevice, sensor: MatterDevice | None, sensor_ok: bool
+        self,
+        device: MatterDevice,
+        sensor: MatterDevice | None,
+        sensor_ok: bool,
+        acl_ok: bool,
     ) -> TrvState:
         if sensor is None:
             # Without a resolved sensor the binding target is unknown; nothing can be
@@ -241,6 +309,10 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
                 repaired = True
                 status = await async_check_trv(self._connection, device, sensor)
 
+        # A bound TRV whose sensor lost its ACL grant is not actually healthy.
+        if status is TrvStatus.BOUND and not acl_ok:
+            status = TrvStatus.ACL_MISSING
+
         if status is TrvStatus.BOUND:
             self._trv_failures[device.device_id] = 0
             if repaired:
@@ -258,7 +330,7 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
             self._device_name(device.device_id, device),
             device.node_id,
             status,
-            status is TrvStatus.BOUND and sensor_ok,
+            status is TrvStatus.BOUND and sensor_ok and acl_ok,
         )
 
     async def _unresolved_state(
@@ -325,7 +397,7 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
             translation_key="repair_failed",
             translation_placeholders={
                 "device_name": device_name,
-                "attempts": self._repair_attempts,
+                "attempts": str(self._repair_attempts),
             },
         )
 
@@ -338,9 +410,11 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
         return device_id
 
     @callback
-    def _on_matter_event(self, event_type: str, data: dict) -> None:
-        if (
-            event_type == "attribute_updated"
-            and data.get("node_id") in self._known_trv_nodes
-        ):
+    def _on_matter_event(self, event_type: str, data: Any) -> None:
+        # shortcut: rides ANY matching event (debounced) as a refresh trigger — the
+        # real client's payload carries no node identity (node filtering is done by its
+        # own subscription keys), so the payload is never inspected. Polling stays the
+        # correctness baseline; upgrade: pass node_filter to subscribe() for per-node
+        # relevance if the extra refreshes ever matter.
+        if event_type in ("attribute_updated", "node_added", "node_removed"):
             self.hass.async_create_task(self.async_request_refresh())

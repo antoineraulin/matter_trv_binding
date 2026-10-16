@@ -89,15 +89,23 @@ async def async_verify_acl(
     trv_node_ids: list[int],
     device_type: int,
 ) -> bool:
-    """True iff some entry on the sensor node grants all TRVs the temperature cluster."""
+    """True iff every TRV is granted the temperature cluster by some entry.
+
+    Matter only requires each subject be granted by *an* entry, so the union across
+    entries (each matching the target cluster/endpoint) is what counts.
+    """
     await connection.async_ensure_connected()
     acl = await connection.read_attribute(sensor_node_id, ACL_ATTRIBUTE_PATH) or []
-    return any(
-        acl_entry_grants(
-            entry, trv_node_ids, CLUSTER_TEMPERATURE_MEASUREMENT, sensor_endpoint
-        )
-        for entry in acl
-    )
+    granted: set[int] = set()
+    for entry in acl:
+        normalized = normalize_acl_entry(entry)
+        if any(
+            target["cluster"] == CLUSTER_TEMPERATURE_MEASUREMENT
+            and target["endpoint"] == sensor_endpoint
+            for target in normalized["targets"]
+        ):
+            granted.update(normalized["subjects"])
+    return set(trv_node_ids).issubset(granted)
 
 
 def _admin_entries_preserved(original: list[dict], current: list[dict]) -> bool:
