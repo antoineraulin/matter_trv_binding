@@ -1,0 +1,115 @@
+from datetime import timedelta
+
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.matter_trv_binding.const import DOMAIN, TrvStatus
+from custom_components.matter_trv_binding.coordinator import BindingCoordinator
+
+
+def seed_healthy(fake_client):
+    fake_client.attributes[9] = {
+        "0/29/3": [0, 361], "361/29/1": [1026], "361/29/0": [{"deviceType": 7, "revision": 1}],
+        "0/31/0": [{"1": 5, "2": 2, "3": [99], "4": []},
+                   {"1": 1, "2": 2, "3": [20], "4": [{"0": 1026, "1": 361}]}],
+    }
+    fake_client.attributes[20] = {
+        "0/29/3": [0, 1], "1/29/1": [513, 30], "1/29/0": [{"deviceType": 769, "revision": 3}],
+        "1/30/0": [{"node": 9, "endpoint": 361, "cluster": 1026}], "1/513/26": 1,
+    }
+
+
+async def make_loaded_pair(hass, fake_client):
+    from custom_components.matter_trv_binding.hub import HubRuntimeData
+    from custom_components.matter_trv_binding.matter.client import MatterConnection
+    conn = MatterConnection("ws://x", client_factory=lambda url: fake_client)
+    await conn.async_connect()
+    hub = MockConfigEntry(domain=DOMAIN, data={"name": "M", "url": "ws://x"}, unique_id="hub")
+    hub.add_to_hass(hass)
+    hub.runtime_data = HubRuntimeData(connection=conn, repair_counts={})
+    binding = MockConfigEntry(domain=DOMAIN, data={"label": "Bureau", "sensor_device_id": "SENS", "trv_device_ids": ["TRV1"]}, unique_id="SENS")
+    binding.add_to_hass(hass)
+    # HA 2026.2 wraps entry data in a read-only MappingProxyType; expose a mutable copy
+    # so the tests below can point the binding at the real device ids.
+    object.__setattr__(binding, "data", dict(binding.data))
+    return hub, binding
+
+
+async def test_healthy_cycle(hass, fake_client, matter_devices):
+    seed_healthy(fake_client)
+    sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
+    trv = matter_devices.create("Eve Thermo Bureau", 20)
+    hub, binding = await make_loaded_pair(hass, fake_client)
+    binding.data["sensor_device_id"] = sensor.id
+    binding.data["trv_device_ids"] = [trv.id]
+    coord = BindingCoordinator(hass, binding, hub)
+    data = await coord._async_update_data()
+    assert data.sensor_ok is True
+    assert data.trvs[trv.id].status is TrvStatus.BOUND and data.trvs[trv.id].healthy
+    assert data.last_check is not None
+
+
+async def test_drift_is_repaired(hass, fake_client, matter_devices):
+    seed_healthy(fake_client)
+    fake_client.attributes[20]["1/30/0"] = []                 # binding lost
+    fake_client.attributes[20]["1/513/26"] = 0                # sensing lost
+    del fake_client.attributes[9]["0/31/0"][1]                # ACL entry lost
+    sensor = matter_devices.create("Capetre Bureau", 9, postfix="361")
+    trv = matter_devices.create("Eve Thermo Bureau", 20)
+    hub, binding = await make_loaded_pair(hass, fake_client)
+    binding.data["sensor_device_id"] = sensor.id
+    binding.data["trv_device_ids"] = [trv.id]
+    coord = BindingCoordinator(hass, binding, hub)
+    data = await coord._async_update_data()
+    assert data.trvs[trv.id].healthy                          # repaired in the same cycle
+    assert fake_client.attributes[20]["1/30/0"]               # binding rewritten
+    assert fake_client.attributes[20]["1/513/26"] == 1
+    assert hub.runtime_data.repair_counts[binding.entry_id] >= 1
+
+
+async def test_unreachable_trv_does_not_block_others(hass, fake_client, matter_devices):
+    seed_healthy(fake_client)
+    trv2 = matter_devices.create("Eve Thermo Salon", 6)
+    fake_client.attributes[6] = {"0/29/3": [0, 1], "1/29/1": [513, 30], "1/29/0": [{"deviceType": 769, "revision": 3}]}
+    fake_client.fail_nodes.add(6)                            # only node 6 fails
+    sensor = matter_devices.create("Capetre Bureau", 9, postfix="361")
+    trv1 = matter_devices.create("Eve Thermo Bureau", 20)
+    hub, binding = await make_loaded_pair(hass, fake_client)
+    binding.data["sensor_device_id"] = sensor.id
+    binding.data["trv_device_ids"] = [trv1.id, trv2.id]
+    coord = BindingCoordinator(hass, binding, hub)
+    data = await coord._async_update_data()
+    assert data.trvs[trv1.id].healthy is True                 # first TRV unaffected
+    assert data.trvs[trv2.id].status is TrvStatus.UNREACHABLE
+
+
+async def test_node_id_change_auto_heals_and_notifies(hass, fake_client, matter_devices):
+    seed_healthy(fake_client)
+    sensor = matter_devices.create("Capetre Bureau", 9, postfix="361")
+    trv = matter_devices.create("Eve Thermo Bureau", 20)
+    hub, binding = await make_loaded_pair(hass, fake_client)
+    binding.data["sensor_device_id"] = sensor.id
+    binding.data["trv_device_ids"] = [trv.id]
+    coord = BindingCoordinator(hass, binding, hub)
+    await coord._async_update_data()
+    # device re-commissioned: same HA device, new node id
+    from homeassistant.helpers import device_registry as dr
+    dr.async_get(hass).async_update_device(trv.id, new_identifiers={("matter", "deviceid_00001234567890AB-0000000000000064-MatterNodeDevice")})
+    fake_client.attributes[100] = dict(fake_client.attributes[20])   # node 0x64 = 100
+    data = await coord._async_update_data()
+    assert data.trvs[trv.id].node_id == 100 and data.trvs[trv.id].healthy
+    assert coord.node_changes == [(trv.id, 20, 100)]
+
+
+async def test_fast_path_refreshes_on_trv_event(hass, fake_client, matter_devices):
+    seed_healthy(fake_client)
+    sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
+    trv = matter_devices.create("Eve Thermo Bureau", 20)
+    hub, binding = await make_loaded_pair(hass, fake_client)
+    binding.data["sensor_device_id"] = sensor.id
+    binding.data["trv_device_ids"] = [trv.id]
+    coord = BindingCoordinator(hass, binding, hub)
+    await coord._async_update_data()
+    fake_client.emit_event("attribute_updated", {"node_id": 20})
+    await hass.async_block_till_done()
+    assert coord.last_update_success
+    assert coord.data.trvs[trv.id].healthy
