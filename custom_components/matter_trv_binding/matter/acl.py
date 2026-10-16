@@ -64,8 +64,10 @@ def desired_acl_entry(
 ) -> dict:
     """Build the ACL entry granting ``subjects`` view access to one target.
 
-    Both ``device_type`` and ``deviceType`` are emitted: matter.js derives a bogus
-    DeviceTypeId when ``device_type`` is absent, so neither spelling is optional.
+    Both ``device_type`` and ``deviceType`` are emitted for cross-generation
+    safety: v1.4.0's target map reads only ``device_type`` (the camelCase key is
+    ignored), but an earlier matter.js generation relied on ``deviceType``. The
+    requirement for this server generation is that ``device_type`` be present.
     """
     return {
         "privilege": PRIVILEGE_VIEW,

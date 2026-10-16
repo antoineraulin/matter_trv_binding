@@ -57,7 +57,12 @@ class MatterTrvBindingOptionsFlowHandler(OptionsFlowWithReload):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            # NumberSelector returns floats; store ints so placeholders and
+            # diagnostics don't render "15.0".
+            data = dict(user_input)
+            data[OPT_UPDATE_INTERVAL_MINUTES] = int(data[OPT_UPDATE_INTERVAL_MINUTES])
+            data[OPT_REPAIR_ATTEMPTS] = int(data[OPT_REPAIR_ATTEMPTS])
+            return self.async_create_entry(data=data)
 
         options = self._entry.options
         suggested = {

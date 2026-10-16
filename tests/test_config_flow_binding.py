@@ -29,7 +29,7 @@ async def test_binding_flow_creates_entry(hass, fake_client, matter_devices):
     assert result["type"] == "create_entry"
     assert result["data"]["sensor_device_id"] == sensor.id
     assert result["data"]["trv_device_ids"] == [trv.id]
-    # the flow applied the binding before creating the entry
+    # the device was left correctly bound by the flow (apply is skipped when already correct)
     assert fake_client.attributes[20]["1/30/0"] == [{"node": 9, "endpoint": 361, "cluster": 1026}]
     assert fake_client.attributes[20]["1/513/26"] == 1
 

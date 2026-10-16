@@ -33,6 +33,7 @@ async def test_hub_options_updates_interval_and_reloads_bindings(hass, fake_clie
     await hass.async_block_till_done()
     assert result["type"] == "create_entry"
     assert hub.options["update_interval_minutes"] == 15
+    assert isinstance(hub.options["update_interval_minutes"], int)
     # binding entry was reloaded so the coordinator picked up the new interval
     assert binding.state is ConfigEntryState.LOADED
     assert binding.runtime_data.coordinator.update_interval == timedelta(minutes=15)
