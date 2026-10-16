@@ -1,0 +1,69 @@
+{
+  "config": {
+    "step": {
+      "hub": {
+        "title": "Connect to the Matter server",
+        "data": {
+          "name": "Name",
+          "url": "Matter server WebSocket URL"
+        }
+      },
+      "binding": {
+        "title": "Bind a temperature sensor to TRVs",
+        "data": {
+          "label": "Label",
+          "sensor_device": "Temperature sensor (Matter device)",
+          "trv_devices": "TRVs (Matter devices)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure the binding",
+        "data": {
+          "label": "Label",
+          "sensor_device": "Temperature sensor (Matter device)",
+          "trv_devices": "TRVs (Matter devices)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the Matter server at {url}.",
+      "legacy_server": "The server is a legacy python-matter-server. Update to the Matter Server add-on 9.x or newer.",
+      "invalid_sensor": "The selected device does not expose a Matter temperature measurement cluster.",
+      "invalid_trv": "These devices do not expose a Matter thermostat cluster: {devices}.",
+      "unreachable": "These devices are unreachable: {devices}.",
+      "apply_failed": "Failed to apply the binding: {detail}"
+    },
+    "abort": {
+      "already_configured": "A Matter TRV Binding connection already exists.",
+      "already_configured_sensor": "A binding for this sensor already exists."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Matter TRV Binding options",
+        "data": {
+          "update_interval_minutes": "Verification interval (minutes)",
+          "auto_repair": "Automatically repair bindings",
+          "repair_attempts": "Failed repairs before raising an issue"
+        }
+      }
+    }
+  },
+  "issues": {
+    "device_missing": {
+      "title": "Bound Matter device no longer exists",
+      "description": "The device {device_name} used by the binding {binding_name} was removed from Home Assistant. Reconfigure or remove the binding."
+    },
+    "repair_failed": {
+      "title": "Binding repair keeps failing",
+      "description": "The binding for {device_name} could not be repaired after {attempts} attempts. Check the device, the Matter network, and the Matter server."
+    }
+  },
+  "services": {
+    "repair": {
+      "name": "Repair bindings",
+      "description": "Runs an immediate verify-and-repair cycle for the selected binding device."
+    }
+  }
+}
