@@ -162,6 +162,16 @@ class MatterConnection:
         )
         return (result or {}).get(attribute_path)
 
+    async def get_matter_fabrics(self, node_id: int) -> list[dict]:
+        """Return the node's fabrics as plain dicts (the real client hands back dataclasses)."""
+        if self._client is None:
+            raise MatterConnectionError("not connected")
+        fabrics = await self._client.get_matter_fabrics(node_id)
+        return [
+            dataclasses.asdict(fabric) if dataclasses.is_dataclass(fabric) else fabric
+            for fabric in fabrics
+        ]
+
     async def write_attribute(self, node_id: int, attribute_path: str, value: Any) -> None:
         result = await self.send_command(
             "write_attribute", node_id=node_id, attribute_path=attribute_path, value=value

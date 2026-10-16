@@ -9,7 +9,7 @@ class FakeMatterClient:
         self.commands: list[tuple[str, dict]] = []
         self.event_subscribers: list[Callable] = []
         self.fail_nodes: set[int] = set()          # reads/writes on these raise
-        self.acl_replaces_all = False             # safety-test mode: set_acl_entry wipes the list
+        self.fabrics: dict[int, list[dict]] = {}   # node_id -> fabric records
         self.connect_fails = 0                    # >0: connect() raises this many times
 
     async def connect(self) -> None:
@@ -27,6 +27,9 @@ class FakeMatterClient:
 
     async def get_server_info(self) -> dict:
         return {"fabric_id": 1, "schema_version": 19, "sdk_version": "fake-1.4.0"}
+
+    async def get_matter_fabrics(self, node_id: int) -> list[dict]:
+        return self.fabrics.get(node_id, [{"fabric_id": 1, "fabric_index": 1}])
 
     def subscribe(self, callback: Callable) -> Callable:
         self.event_subscribers.append(callback)
@@ -50,18 +53,6 @@ class FakeMatterClient:
             self._check_node(node_id)
             self.attributes.setdefault(node_id, {})[kwargs["attribute_path"]] = kwargs["value"]
             return [{"Path": kwargs["attribute_path"], "Status": 0}]
-        if command == "set_acl_entry":
-            self._check_node(node_id)
-            # Real contract: `entry` is an ARRAY of entries (server calls entries.map).
-            entry = kwargs["entry"]
-            if not isinstance(entry, list):
-                raise TypeError("entries.map is not a function")
-            acl = self.attributes.setdefault(node_id, {}).setdefault("0/31/0", [])
-            if self.acl_replaces_all:
-                acl[:] = list(entry)
-            else:
-                acl.extend(entry)
-            return {"Status": 0}
         if command == "set_node_binding":
             self._check_node(node_id)
             # Real contract: every binding must carry node/group/endpoint/cluster;

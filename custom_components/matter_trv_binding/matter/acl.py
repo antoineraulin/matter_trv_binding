@@ -43,6 +43,25 @@ def normalize_acl_entry(entry: dict) -> dict:
         "auth_mode": entry.get("auth_mode", entry.get("authMode", entry.get("2"))),
         "subjects": list(entry.get("subjects", entry.get("3", [])) or []),
         "targets": [_normalize_target(t) for t in (entry.get("targets", entry.get("4", [])) or [])],
+        "fabric_index": entry.get("fabricIndex", entry.get("254")),
+    }
+
+
+def _to_write_entry(entry: dict, fabric_index: int) -> dict:
+    """Render a normalized entry as the device's AccessControl write shape (camelCase)."""
+    return {
+        "privilege": entry["privilege"],
+        "authMode": entry["auth_mode"],
+        "subjects": list(entry["subjects"]),
+        "targets": [
+            {
+                "cluster": t.get("cluster"),
+                "endpoint": t.get("endpoint"),
+                "deviceType": t.get("device_type"),
+            }
+            for t in entry["targets"]
+        ],
+        "fabricIndex": fabric_index,
     }
 
 
@@ -131,28 +150,70 @@ async def async_apply_acl(
     trv_node_ids: list[int],
     device_type: int,
 ) -> None:
-    """Add the binding's ACL entry, never leaving the node without admin access."""
+    """Ensure our fabric's ACL holds exactly our managed grant, keeping admin access.
+
+    matterjs-server's ``set_acl_entry`` replaces the controller fabric's whole ACL
+    (and reports write failures as data, never throwing), so the complete desired
+    list for our fabric is written through the raw ``write_attribute`` path instead.
+    """
     await connection.async_ensure_connected()
-    # Copy: a server that replaces the whole list mutates in place, which would
-    # otherwise clobber this snapshot before the rollback can use it.
+    # Snapshot as-read: the rollback below depends on it staying untouched.
     original = list(await connection.read_attribute(sensor_node_id, ACL_ATTRIBUTE_PATH) or [])
 
-    await connection.send_command(
-        "set_acl_entry",
-        node_id=sensor_node_id,
-        # Server contract: `entry` is an array of ACL entries (a bare object
-        # crashes the server's entries.map), so always send a one-element list.
-        entry=[
-            desired_acl_entry(
-                trv_node_ids, CLUSTER_TEMPERATURE_MEASUREMENT, sensor_endpoint, device_type
-            )
-        ],
+    our_fabric_id = (connection.server_info or {}).get("fabric_id")
+    fabrics = await connection.get_matter_fabrics(sensor_node_id)
+    our_index = next(
+        (f.get("fabric_index") for f in fabrics if f.get("fabric_id") == our_fabric_id),
+        None,
     )
-    current = await connection.read_attribute(sensor_node_id, ACL_ATTRIBUTE_PATH) or []
+    if our_index is None:
+        raise MatterCommandError(
+            f"could not identify this controller's fabric on node {sensor_node_id}; "
+            "refusing to modify the ACL"
+        )
 
+    ours = [
+        normalize_acl_entry(e)
+        for e in original
+        if normalize_acl_entry(e)["fabric_index"] == our_index
+    ]
+    # Replace semantics: drop any existing view grant to this sensor endpoint (e.g.
+    # from an earlier TRV set) so repeat applies never accumulate stale grants.
+    kept = [
+        e
+        for e in ours
+        if not (
+            e["privilege"] == PRIVILEGE_VIEW
+            and any(
+                t.get("cluster") == CLUSTER_TEMPERATURE_MEASUREMENT
+                and t.get("endpoint") == sensor_endpoint
+                for t in e["targets"]
+            )
+        )
+    ]
+    if not any(e["privilege"] == PRIVILEGE_ADMIN for e in kept):
+        raise MatterCommandError(
+            "refusing ACL write: it would remove the controller's admin access"
+        )
+
+    desired = normalize_acl_entry(
+        desired_acl_entry(
+            trv_node_ids, CLUSTER_TEMPERATURE_MEASUREMENT, sensor_endpoint, device_type
+        )
+    )
+    new_list = [_to_write_entry(e, our_index) for e in kept] + [
+        _to_write_entry(desired, our_index)
+    ]
+    await connection.write_attribute(sensor_node_id, ACL_ATTRIBUTE_PATH, new_list)
+
+    current = await connection.read_attribute(sensor_node_id, ACL_ATTRIBUTE_PATH) or []
     if not _admin_entries_preserved(original, current):
         try:
-            await connection.write_attribute(sensor_node_id, ACL_ATTRIBUTE_PATH, original)
+            await connection.write_attribute(
+                sensor_node_id,
+                ACL_ATTRIBUTE_PATH,
+                [_to_write_entry(e, our_index) for e in ours],
+            )
         except Exception:  # noqa: BLE001 - rollback is best-effort; report the lockout cause
             _LOGGER.exception(
                 "Failed to roll back ACL on node %s after a lockout-risk write",

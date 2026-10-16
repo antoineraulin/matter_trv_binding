@@ -18,7 +18,7 @@ async def test_binding_flow_creates_entry(hass, fake_client, matter_devices):
     seed_healthy(fake_client)
     sensor = matter_devices.create("Capetre Bureau", 9, postfix="361")
     trv = matter_devices.create("Eve Thermo Bureau", 20)
-    fake_client.attributes[9]["0/31/0"] = [{"1": 5, "2": 2, "3": [99], "4": []}]  # only admin; ACL to be created by the flow
+    fake_client.attributes[9]["0/31/0"] = [{"1": 5, "2": 2, "3": [99], "4": [], "fabricIndex": 1}]  # only admin; ACL to be created by the flow
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     assert result["step_id"] == "binding"
     result = await hass.config_entries.flow.async_configure(
@@ -80,7 +80,7 @@ async def test_binding_flow_rejects_empty_trv_list(hass, fake_client, matter_dev
     await setup_hub(hass)
     seed_healthy(fake_client)
     sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
-    fake_client.attributes[9]["0/31/0"] = [{"1": 5, "2": 2, "3": [99], "4": []}]
+    fake_client.attributes[9]["0/31/0"] = [{"1": 5, "2": 2, "3": [99], "4": [], "fabricIndex": 1}]
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     with pytest.raises(InvalidData):
         await hass.config_entries.flow.async_configure(

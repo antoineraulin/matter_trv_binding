@@ -6,11 +6,23 @@ from custom_components.matter_trv_binding.const import DOMAIN, TrvStatus
 from custom_components.matter_trv_binding.coordinator import BindingCoordinator
 
 
+def reject_acl_writes(fake_client, state):
+    """Make sensor-ACL writes return a non-zero status while state["fail"] is set."""
+    original = fake_client.send_command
+
+    async def bad(command, **kw):
+        if command == "write_attribute" and kw.get("attribute_path") == "0/31/0" and state["fail"]:
+            return [{"Path": "0/31/0", "Status": 1}]
+        return await original(command, **kw)
+
+    fake_client.send_command = bad  # type: ignore[assignment]
+
+
 def seed_healthy(fake_client):
     fake_client.attributes[9] = {
         "0/29/3": [0, 361], "361/29/1": [1026], "361/29/0": [{"deviceType": 7, "revision": 1}],
-        "0/31/0": [{"1": 5, "2": 2, "3": [99], "4": []},
-                   {"1": 1, "2": 2, "3": [20], "4": [{"0": 1026, "1": 361}]}],
+        "0/31/0": [{"1": 5, "2": 2, "3": [99], "4": [], "fabricIndex": 1},
+                   {"1": 1, "2": 2, "3": [20], "4": [{"0": 1026, "1": 361}], "fabricIndex": 1}],
     }
     fake_client.attributes[20] = {
         "0/29/3": [0, 1], "1/29/1": [513, 30], "1/29/0": [{"deviceType": 769, "revision": 3}],
@@ -137,7 +149,8 @@ async def test_repair_failed_escalation_and_clear(hass, fake_client, matter_devi
     from homeassistant.helpers import issue_registry as ir
     seed_healthy(fake_client)
     del fake_client.attributes[9]["0/31/0"][1]      # sensor ACL grant lost
-    fake_client.acl_replaces_all = True             # every ACL repair rolls back and raises
+    acl_state = {"fail": True}
+    reject_acl_writes(fake_client, acl_state)      # every ACL repair write is rejected
     sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
     trv = matter_devices.create("Eve Thermo Bureau", 20)
     hub, binding = await make_loaded_pair(hass, fake_client)
@@ -148,7 +161,7 @@ async def test_repair_failed_escalation_and_clear(hass, fake_client, matter_devi
     issue_id = f"repair_failed_{binding.entry_id}"
     await coord._async_update_data()
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is not None
-    fake_client.acl_replaces_all = False            # next repair succeeds
+    acl_state["fail"] = False                       # next repair succeeds
     await coord._async_update_data()
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
 
@@ -196,7 +209,7 @@ async def test_device_missing_issue_persists_with_mixed_trvs(hass, fake_client, 
 async def test_acl_lost_marks_trv_acl_missing(hass, fake_client, matter_devices):
     seed_healthy(fake_client)
     del fake_client.attributes[9]["0/31/0"][1]      # sensor ACL grant lost
-    fake_client.acl_replaces_all = True             # repair rolls back and fails
+    reject_acl_writes(fake_client, {"fail": True})  # repair write is rejected -> repair fails
     sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
     trv = matter_devices.create("Eve Thermo Bureau", 20)
     hub, binding = await make_loaded_pair(hass, fake_client)

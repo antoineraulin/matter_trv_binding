@@ -56,6 +56,12 @@ async def test_read_attribute_returns_value(fake_client):
     assert await conn.read_attribute(5, "9/9/9") is None
 
 
+async def test_get_matter_fabrics_passthrough(fake_client):
+    conn = make_conn(fake_client)
+    await conn.async_connect()
+    assert await conn.get_matter_fabrics(9) == [{"fabric_id": 1, "fabric_index": 1}]
+
+
 async def test_write_attribute_raises_on_bad_status(fake_client):
     conn = make_conn(fake_client)
     await conn.async_connect()
