@@ -150,9 +150,14 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
                     device_id, failed[device_id], label
                 )
                 continue
-            # Device resolves again: a stale missing-device issue is no longer valid.
-            ir.async_delete_issue(self.hass, DOMAIN, f"device_missing_{entry.entry_id}")
             trvs[device_id] = await self._verify_trv(device, sensor, sensor_ok)
+
+        # Clear a stale missing-device issue only when nothing is missing this cycle;
+        # deleting it inside the loop would drop the warning in mixed bindings.
+        if not any(s.status is TrvStatus.DEVICE_MISSING for s in trvs.values()):
+            ir.async_delete_issue(
+                self.hass, DOMAIN, f"device_missing_{entry.entry_id}"
+            )
 
         self._sync_repair_failed_issue(label, trvs)
 
@@ -227,8 +232,11 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
         ):
             try:
                 await async_apply_trv(self._connection, device, sensor)
-            except MatterConnectionError:
-                status = TrvStatus.UNREACHABLE
+            except (MatterConnectionError, MatterCommandError):
+                # The node answered the check/reads, so it is reachable: a failed
+                # write (e.g. RemoteSensing non-zero status) keeps the pre-repair
+                # status and lets this TRV's failure counter increment.
+                pass
             else:
                 repaired = True
                 status = await async_check_trv(self._connection, device, sensor)

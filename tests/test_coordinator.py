@@ -149,3 +149,43 @@ async def test_repair_failed_escalation_and_clear(hass, fake_client, matter_devi
     fake_client.acl_replaces_all = False            # next repair succeeds
     await coord._async_update_data()
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
+
+
+async def test_apply_write_failure_does_not_abort_cycle(hass, fake_client, matter_devices):
+    seed_healthy(fake_client)
+    fake_client.attributes[20]["1/30/0"] = []       # binding missing -> repair writes
+    fake_client.attributes[20]["1/513/26"] = 0      # sensing off -> repair writes bit 0
+    sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
+    trv = matter_devices.create("Eve Thermo Bureau", 20)
+    hub, binding = await make_loaded_pair(hass, fake_client)
+    binding.data["sensor_device_id"] = sensor.id
+    binding.data["trv_device_ids"] = [trv.id]
+    coord = BindingCoordinator(hass, binding, hub)
+
+    original = fake_client.send_command
+
+    async def bad(command, **kw):
+        if command == "write_attribute" and str(kw.get("attribute_path", "")).endswith("/513/26"):
+            return [{"Path": kw["attribute_path"], "Status": 1}]
+        return await original(command, **kw)
+
+    fake_client.send_command = bad  # type: ignore[assignment]
+    await coord.async_refresh()
+    assert coord.data is not None
+    assert coord.last_update_success
+    assert coord.data.trvs[trv.id].status is TrvStatus.BINDING_MISSING
+
+
+async def test_device_missing_issue_persists_with_mixed_trvs(hass, fake_client, matter_devices):
+    from homeassistant.helpers import issue_registry as ir
+    seed_healthy(fake_client)
+    sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
+    trv = matter_devices.create("Eve Thermo Bureau", 20)
+    hub, binding = await make_loaded_pair(hass, fake_client)
+    binding.data["sensor_device_id"] = sensor.id
+    binding.data["trv_device_ids"] = ["missing-device-id", trv.id]   # missing first
+    coord = BindingCoordinator(hass, binding, hub)
+    data = await coord._async_update_data()
+    assert data.trvs["missing-device-id"].status is TrvStatus.DEVICE_MISSING
+    assert data.trvs[trv.id].status is TrvStatus.BOUND
+    assert ir.async_get(hass).async_get_issue(DOMAIN, f"device_missing_{binding.entry_id}") is not None
