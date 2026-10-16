@@ -34,7 +34,7 @@ from .const import (
 from .hub import HubRuntimeData
 from .matter.acl import async_apply_acl, async_verify_acl
 from .matter.bindings import async_apply_trv, async_check_trv
-from .matter.client import MatterConnectionError
+from .matter.client import MatterCommandError, MatterConnectionError
 from .matter.discovery import (
     DeviceMissingError,
     MatterDevice,
@@ -193,7 +193,8 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
                     trv_node_ids,
                     device_type,
                 )
-        except MatterConnectionError:
+        except (MatterConnectionError, MatterCommandError):
+            # A rolled-back ACL write (lockout guard) is a failed repair, not a crash.
             acl_ok = False
         self._binding_failures = 0 if acl_ok else self._binding_failures + 1
 
@@ -217,7 +218,13 @@ class BindingCoordinator(DataUpdateCoordinator[BindingData]):
 
         status = await async_check_trv(self._connection, device, sensor)
         repaired = False
-        if status is not TrvStatus.BOUND and self._auto_repair:
+        # Never write against a dead node: only a reachable, mis-configured TRV is
+        # repairable (DEVICE_MISSING cannot reach here; UNREACHABLE must be skipped).
+        if self._auto_repair and status not in (
+            TrvStatus.BOUND,
+            TrvStatus.UNREACHABLE,
+            TrvStatus.DEVICE_MISSING,
+        ):
             try:
                 await async_apply_trv(self._connection, device, sensor)
             except MatterConnectionError:

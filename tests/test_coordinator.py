@@ -113,3 +113,39 @@ async def test_fast_path_refreshes_on_trv_event(hass, fake_client, matter_device
     await hass.async_block_till_done()
     assert coord.last_update_success
     assert coord.data.trvs[trv.id].healthy
+
+
+async def test_device_missing_creates_issue(hass, fake_client, matter_devices):
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import issue_registry as ir
+    seed_healthy(fake_client)
+    sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
+    trv = matter_devices.create("Eve Thermo Bureau", 20)
+    hub, binding = await make_loaded_pair(hass, fake_client)
+    binding.data["sensor_device_id"] = sensor.id
+    binding.data["trv_device_ids"] = [trv.id]
+    coord = BindingCoordinator(hass, binding, hub)
+    dr.async_get(hass).async_remove_device(trv.id)          # device gone from the registry
+    data = await coord._async_update_data()
+    assert data.trvs[trv.id].status is TrvStatus.DEVICE_MISSING
+    assert ir.async_get(hass).async_get_issue(DOMAIN, f"device_missing_{binding.entry_id}") is not None
+
+
+async def test_repair_failed_escalation_and_clear(hass, fake_client, matter_devices):
+    from homeassistant.helpers import issue_registry as ir
+    seed_healthy(fake_client)
+    del fake_client.attributes[9]["0/31/0"][1]      # sensor ACL grant lost
+    fake_client.acl_replaces_all = True             # every ACL repair rolls back and raises
+    sensor = matter_devices.create("Capteur Bureau", 9, postfix="361")
+    trv = matter_devices.create("Eve Thermo Bureau", 20)
+    hub, binding = await make_loaded_pair(hass, fake_client)
+    object.__setattr__(hub, "options", {"repair_attempts": 1})   # escalate on first failure
+    binding.data["sensor_device_id"] = sensor.id
+    binding.data["trv_device_ids"] = [trv.id]
+    coord = BindingCoordinator(hass, binding, hub)
+    issue_id = f"repair_failed_{binding.entry_id}"
+    await coord._async_update_data()
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is not None
+    fake_client.acl_replaces_all = False            # next repair succeeds
+    await coord._async_update_data()
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
