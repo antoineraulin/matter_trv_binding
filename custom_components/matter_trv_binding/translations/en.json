@@ -23,6 +23,10 @@
           "sensor_device": "Temperature sensor (Matter device)",
           "trv_devices": "TRVs (Matter devices)"
         }
+      },
+      "init": {
+        "title": "Remove this binding?",
+        "description": "This removes the binding entry {binding_name} and its entities from Home Assistant. Matter bindings on the devices themselves are not changed."
       }
     },
     "error": {
