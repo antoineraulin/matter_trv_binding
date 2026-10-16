@@ -10,6 +10,11 @@ from homeassistant.config_entries import (
     OptionsFlowWithReload,
 )
 from homeassistant.core import callback
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 
 from .const import (
     DEFAULT_AUTO_REPAIR,
@@ -25,12 +30,12 @@ from .hub import get_hub_entry
 
 _OPTIONS_SCHEMA = vol.Schema(
     {
-        vol.Required(OPT_UPDATE_INTERVAL_MINUTES): vol.All(
-            vol.Coerce(int), vol.Range(min=5, max=1440)
+        vol.Required(OPT_UPDATE_INTERVAL_MINUTES): NumberSelector(
+            NumberSelectorConfig(min=5, max=1440, step=1, mode=NumberSelectorMode.BOX)
         ),
         vol.Required(OPT_AUTO_REPAIR): bool,
-        vol.Required(OPT_REPAIR_ATTEMPTS): vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=10)
+        vol.Required(OPT_REPAIR_ATTEMPTS): NumberSelector(
+            NumberSelectorConfig(min=1, max=10, step=1, mode=NumberSelectorMode.BOX)
         ),
     }
 )
