@@ -1,0 +1,64 @@
+from custom_components.matter_trv_binding.matter.client import (
+    MatterCommandError, MatterConnection, MatterConnectionError,
+)
+
+
+def make_conn(fake_client):
+    return MatterConnection("ws://x", client_factory=lambda url: fake_client)
+
+
+async def test_connect_returns_server_info(fake_client):
+    conn = make_conn(fake_client)
+    info = await conn.async_connect()
+    assert info["fabric_id"] == 1
+    assert fake_client.connected
+
+
+async def test_connect_failure_raises(fake_client):
+    fake_client.connect_fails = 2
+    conn = make_conn(fake_client)
+    try:
+        await conn.async_connect()
+        raise AssertionError("should raise")
+    except MatterConnectionError:
+        pass
+
+
+async def test_ensure_connected_reconnects_after_drop(fake_client):
+    conn = make_conn(fake_client)
+    await conn.async_connect()
+    fake_client.connected = False  # server died
+    await conn.async_ensure_connected()
+    assert fake_client.connected
+
+
+async def test_read_attribute_returns_value(fake_client):
+    fake_client.attributes[5] = {"1/513/26": 1}
+    conn = make_conn(fake_client)
+    await conn.async_connect()
+    assert await conn.read_attribute(5, "1/513/26") == 1
+    assert await conn.read_attribute(5, "9/9/9") is None
+
+
+async def test_write_attribute_raises_on_bad_status(fake_client):
+    conn = make_conn(fake_client)
+    await conn.async_connect()
+    async def bad(**kw):
+        return [{"Path": kw["attribute_path"], "Status": 1}]
+    fake_client.send_command = bad  # type: ignore[assignment]
+    try:
+        await conn.write_attribute(5, "1/513/26", 1)
+        raise AssertionError("should raise")
+    except MatterCommandError:
+        pass
+
+
+async def test_subscribe_roundtrip(fake_client):
+    conn = make_conn(fake_client)
+    await conn.async_connect()
+    events = []
+    unsub = conn.subscribe(lambda et, data: events.append((et, data)))
+    fake_client.emit_event("attribute_updated", {"node_id": 5})
+    unsub()
+    fake_client.emit_event("attribute_updated", {"node_id": 5})
+    assert len(events) == 1 and events[0][1]["node_id"] == 5
