@@ -50,6 +50,21 @@
       }
     }
   },
+  "entity": {
+    "sensor": {
+      "last_check": {
+        "name": "Last check"
+      },
+      "repairs": {
+        "name": "Repairs"
+      }
+    },
+    "button": {
+      "check_and_repair": {
+        "name": "Check and repair"
+      }
+    }
+  },
   "issues": {
     "device_missing": {
       "title": "Bound Matter device no longer exists",
