@@ -8,6 +8,7 @@ the cluster the integration needs.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from homeassistant.core import HomeAssistant
@@ -19,6 +20,7 @@ from .client import MatterConnection, MatterConnectionError
 
 _MATTER_DOMAIN = "matter"
 _NODE_ID_RE = re.compile(r"^deviceid_[0-9A-F]{16}-([0-9A-F]{16})-.*$")
+_ENDPOINT_RE = re.compile(r"^deviceid_[0-9A-F]{16}-[0-9A-F]{16}-(.*)$")
 
 # Descriptor cluster (0x001D) attributes: DeviceTypeList=0x0000, ServerList=0x0001,
 # ClientList=0x0002, PartsList=0x0003.
@@ -55,6 +57,21 @@ def parse_matter_node_id(device: DeviceEntry) -> int | None:
     return None
 
 
+def parse_matter_endpoint(device: DeviceEntry) -> int | None:
+    """Extract the endpoint of a bridged Matter device, or None for a node-level one.
+
+    Bridged devices carry their decimal endpoint as the identifier postfix; the node
+    itself uses ``MatterNodeDevice``.
+    """
+    for domain, identifier in device.identifiers:
+        if domain != _MATTER_DOMAIN:
+            continue
+        match = _ENDPOINT_RE.match(identifier)
+        if match and match.group(1).isdigit():
+            return int(match.group(1))
+    return None
+
+
 async def async_scan_node(
     connection: MatterConnection, node_id: int
 ) -> dict[int, tuple[set[int], tuple[int, ...]]]:
@@ -85,7 +102,7 @@ async def async_scan_node(
 async def async_resolve_device(
     connection: MatterConnection, hass: HomeAssistant, device_id: str, wanted_cluster: int
 ) -> MatterDevice:
-    """Resolve ``device_id`` to the lowest endpoint hosting ``wanted_cluster``."""
+    """Resolve ``device_id`` to its own endpoint, else the lowest hosting ``wanted_cluster``."""
     entry = dr.async_get(hass).async_get(device_id)
     if entry is None:
         raise DeviceMissingError(device_id)
@@ -98,7 +115,15 @@ async def async_resolve_device(
     except MatterConnectionError as err:
         raise NodeUnreachableError(str(err)) from err
 
-    for endpoint in sorted(endpoints):
+    # A bridged device names its own endpoint; only trust it when the scan agrees it
+    # hosts the wanted cluster, otherwise fall back to the lowest matching endpoint.
+    preferred = parse_matter_endpoint(entry)
+    if preferred is not None and wanted_cluster in endpoints.get(preferred, (set(), ()))[0]:
+        candidates: Iterable[int] = (preferred,)
+    else:
+        candidates = sorted(endpoints)
+
+    for endpoint in candidates:
         clusters, device_types = endpoints[endpoint]
         if wanted_cluster in clusters:
             return MatterDevice(

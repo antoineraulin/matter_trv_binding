@@ -59,18 +59,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 def _async_create_binding_device(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Create/refresh the binding device, linked to the sensor's Matter device."""
     registry = dr.async_get(hass)
-    sensor_entry = registry.async_get(entry.data["sensor_device_id"])
-    via_device: tuple[str, str] | None = None
-    if sensor_entry is not None:
-        via_device = next(
-            (ident for ident in sensor_entry.identifiers if ident[0] == "matter"), None
-        )
-    registry.async_get_or_create(
+    device = registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.entry_id)},
         name=f"Matter Binding — {entry.data['label']}",
-        via_device=via_device,
     )
+    # Link by device-entry id, not the deprecated (domain, identifier) tuple.
+    # HA 2026.2's async_get_or_create has no via_device_id kwarg yet, so set it
+    # through async_update_device (the same route core's bluetooth uses).
+    sensor_entry = registry.async_get(entry.data["sensor_device_id"])
+    if sensor_entry is not None:
+        registry.async_update_device(device.id, via_device_id=sensor_entry.id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

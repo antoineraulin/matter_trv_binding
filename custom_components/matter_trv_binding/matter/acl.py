@@ -271,10 +271,10 @@ async def async_apply_acl(
             f"ACL entry not present on node {sensor_node_id} after write"
         )
 
-    if len(current) > DEVICE_LIMIT:
+    if len(ours) > DEVICE_LIMIT:
         _LOGGER.warning(
-            "ACL on node %s holds %d entries, above the %d-entry device limit",
+            "the ACL for this fabric on node %s holds %d entries (above the common "
+            "3–4-entry per-fabric device limit)",
             sensor_node_id,
-            len(current),
-            DEVICE_LIMIT,
+            len(ours),
         )

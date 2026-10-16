@@ -231,13 +231,31 @@ async def test_apply_raises_and_names_path_on_rejected_write(fake_client):
         assert ACL_ATTRIBUTE_PATH in str(err)
 
 
-async def test_apply_warns_when_acl_exceeds_device_limit(fake_client, caplog):
-    """Spec: an ACL longer than the ~4-entry device limit must be logged."""
+async def test_apply_does_not_warn_when_only_foreign_fabric_exceeds_limit(fake_client, caplog):
+    """Only our fabric's entry count matters: foreign entries pushing the total over
+    the limit (our fabric stays at 1) must NOT warn."""
     fake_client.attributes[9] = {
-        "0/31/0": [ADMIN] + [{"1": 1, "2": 2, "3": [i], "4": [], "fabricIndex": 1} for i in range(1, 5)]
+        "0/31/0": [ADMIN] + [
+            {"1": 1, "2": 2, "3": [i], "4": [], "fabricIndex": 2} for i in range(1, 6)
+        ]
+    }
+    conn = make_conn(fake_client)
+    with caplog.at_level(logging.WARNING):
+        await async_apply_acl(conn, 9, 361, [20, 6], 7)
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert not warnings
+
+
+async def test_apply_warns_when_our_fabric_exceeds_device_limit(fake_client, caplog):
+    """Our fabric alone holding more than the ~4-entry limit must be logged."""
+    fake_client.attributes[9] = {
+        "0/31/0": [ADMIN] + [
+            {"1": 1, "2": 2, "3": [i], "4": [], "fabricIndex": 1} for i in range(1, 6)
+        ]
     }
     conn = make_conn(fake_client)
     with caplog.at_level(logging.WARNING):
         await async_apply_acl(conn, 9, 361, [20, 6], 7)
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert warnings and "9" in warnings[0].getMessage()
+    assert "this fabric" in warnings[0].getMessage()

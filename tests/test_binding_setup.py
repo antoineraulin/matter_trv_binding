@@ -28,6 +28,11 @@ async def test_binding_setup_creates_device_and_entities(hass, fake_client, matt
     assert hass.states.get("sensor.matter_binding_bureau_last_check") is not None
     assert hass.states.get("sensor.matter_binding_bureau_repairs").state == "0"
     assert hass.states.get("button.matter_binding_bureau_check_and_repair") is not None
+    from homeassistant.helpers import device_registry as dr
+    binding_device = dr.async_get(hass).async_get_device(
+        identifiers={(DOMAIN, binding.entry_id)}
+    )
+    assert binding_device.via_device_id == sensor.id
 
 
 async def test_binding_setup_without_hub_fails(hass, fake_client, matter_devices):
