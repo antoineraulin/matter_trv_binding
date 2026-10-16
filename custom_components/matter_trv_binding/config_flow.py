@@ -5,6 +5,7 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries, data_entry_flow
+from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import DeviceSelector
@@ -18,6 +19,7 @@ from .const import (
     TrvStatus,
 )
 from .hub import async_create_connection, get_hub_entry
+from .options_flow import MatterTrvBindingOptionsFlowHandler
 from .matter.acl import async_apply_acl, async_verify_acl
 from .matter.bindings import async_apply_trv, async_check_trv
 from .matter.client import MatterCommandError, MatterConnectionError
@@ -68,6 +70,24 @@ class MatterTrvBindingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Hub connection flow and the sensor->TRV binding flow."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Only the hub entry has options; bindings have none."""
+        if config_entry.unique_id == HUB_UNIQUE_ID:
+            return MatterTrvBindingOptionsFlowHandler(config_entry)
+        raise data_entry_flow.UnknownHandler
+
+    @classmethod
+    @callback
+    def async_supports_options_flow(
+        cls, config_entry: config_entries.ConfigEntry
+    ) -> bool:
+        """Keep the options gear off binding entries in the UI."""
+        return config_entry.unique_id == HUB_UNIQUE_ID
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -145,6 +165,50 @@ class MatterTrvBindingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         placeholders = {key: errors.pop(key) for key in _PLACEHOLDER_KEYS if key in errors}
         return self.async_show_form(
             step_id="binding",
+            data_schema=_BINDING_SCHEMA,
+            errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Re-run the binding validation with an updated sensor/TRV list."""
+        entry = self._get_reconfigure_entry()
+        if user_input is None:
+            return self.async_show_form(
+                step_id="reconfigure",
+                data_schema=self.add_suggested_values_to_schema(
+                    _BINDING_SCHEMA,
+                    {
+                        "label": entry.data.get("label"),
+                        "sensor_device": entry.data["sensor_device_id"],
+                        "trv_devices": list(entry.data["trv_device_ids"]),
+                    },
+                ),
+            )
+
+        await self.async_set_unique_id(entry.unique_id)
+        self._abort_if_unique_id_mismatch()
+
+        errors = await self._async_validate_and_apply(user_input)
+        if errors is None:
+            label = user_input.get("label") or _device_label(
+                self.hass, user_input["sensor_device"]
+            )
+            return self.async_update_reload_and_abort(
+                entry,
+                data_updates={
+                    **entry.data,
+                    "label": label,
+                    "sensor_device_id": user_input["sensor_device"],
+                    "trv_device_ids": list(user_input["trv_devices"]),
+                },
+            )
+
+        placeholders = {key: errors.pop(key) for key in _PLACEHOLDER_KEYS if key in errors}
+        return self.async_show_form(
+            step_id="reconfigure",
             data_schema=_BINDING_SCHEMA,
             errors=errors,
             description_placeholders=placeholders,

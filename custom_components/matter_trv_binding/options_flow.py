@@ -1,0 +1,91 @@
+"""Options flow for the hub entry: verification interval and repair behaviour."""
+from __future__ import annotations
+
+from typing import Any, Mapping
+
+import voluptuous as vol
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlowResult,
+    OptionsFlowWithReload,
+)
+from homeassistant.core import callback
+
+from .const import (
+    DEFAULT_AUTO_REPAIR,
+    DEFAULT_REPAIR_ATTEMPTS,
+    DEFAULT_UPDATE_INTERVAL_MINUTES,
+    DOMAIN,
+    HUB_UNIQUE_ID,
+    OPT_AUTO_REPAIR,
+    OPT_REPAIR_ATTEMPTS,
+    OPT_UPDATE_INTERVAL_MINUTES,
+)
+
+_OPTIONS_SCHEMA = vol.Schema(
+    {
+        vol.Required(OPT_UPDATE_INTERVAL_MINUTES): vol.All(
+            vol.Coerce(int), vol.Range(min=5, max=1440)
+        ),
+        vol.Required(OPT_AUTO_REPAIR): bool,
+        vol.Required(OPT_REPAIR_ATTEMPTS): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=10)
+        ),
+    }
+)
+
+
+class MatterTrvBindingOptionsFlowHandler(OptionsFlowWithReload):
+    """Hub options; the hub entry itself is reloaded by OptionsFlowWithReload."""
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        self._entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        options = self._entry.options
+        suggested = {
+            OPT_UPDATE_INTERVAL_MINUTES: options.get(
+                OPT_UPDATE_INTERVAL_MINUTES, DEFAULT_UPDATE_INTERVAL_MINUTES
+            ),
+            OPT_AUTO_REPAIR: options.get(OPT_AUTO_REPAIR, DEFAULT_AUTO_REPAIR),
+            OPT_REPAIR_ATTEMPTS: options.get(
+                OPT_REPAIR_ATTEMPTS, DEFAULT_REPAIR_ATTEMPTS
+            ),
+        }
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self.add_suggested_values_to_schema(_OPTIONS_SCHEMA, suggested),
+        )
+
+    @callback
+    def async_create_entry(
+        self,
+        *,
+        title: str | None = None,
+        data: Mapping[str, Any],
+        description: str | None = None,
+        description_placeholders: Mapping[str, str] | None = None,
+    ) -> ConfigFlowResult:
+        # Binding coordinators read the interval/repair options only at creation, so
+        # they must reload to pick up the new values. Lazy task: the flow manager
+        # applies the new options only after this returns, so an eager task would
+        # reload against the old values.
+        self.hass.async_create_task(
+            self._async_reload_binding_entries(), eager_start=False
+        )
+        return super().async_create_entry(
+            title=title,
+            data=data,
+            description=description,
+            description_placeholders=description_placeholders,
+        )
+
+    async def _async_reload_binding_entries(self) -> None:
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.unique_id != HUB_UNIQUE_ID:
+                await self.hass.config_entries.async_reload(entry.entry_id)
