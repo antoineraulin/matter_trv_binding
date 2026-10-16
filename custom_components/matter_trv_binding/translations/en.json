@@ -69,7 +69,6 @@
   "issues": {
     "device_missing": {
       "title": "Bound Matter device no longer exists",
-      "description": "The device {device_name} used by the binding {binding_name} was removed from Home Assistant. Reconfigure or remove the binding.",
       "fix_flow": {
         "step": {
           "init": {

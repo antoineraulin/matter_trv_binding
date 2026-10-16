@@ -1,0 +1,95 @@
+{
+  "config": {
+    "step": {
+      "hub": {
+        "title": "Se connecter au serveur Matter",
+        "data": {
+          "name": "Nom",
+          "url": "URL WebSocket du serveur Matter"
+        }
+      },
+      "binding": {
+        "title": "Lier un capteur de température à des têtes thermostatiques",
+        "data": {
+          "label": "Libellé",
+          "sensor_device": "Capteur de température (appareil Matter)",
+          "trv_devices": "Têtes thermostatiques (appareils Matter)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurer la liaison",
+        "data": {
+          "label": "Libellé",
+          "sensor_device": "Capteur de température (appareil Matter)",
+          "trv_devices": "Têtes thermostatiques (appareils Matter)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Échec de la connexion au serveur Matter à l'adresse {url}.",
+      "legacy_server": "Le serveur est un python-matter-server obsolète. Mettez à jour vers l'add-on Matter Server 9.x ou une version ultérieure.",
+      "invalid_sensor": "L'appareil sélectionné n'expose pas de cluster Matter de mesure de température.",
+      "invalid_trv": "Ces appareils n'exposent pas de cluster Matter de thermostat : {devices}.",
+      "unreachable": "Ces appareils sont injoignables : {devices}.",
+      "apply_failed": "Échec de l'application de la liaison : {detail}"
+    },
+    "abort": {
+      "already_configured": "Une connexion Matter TRV Binding existe déjà.",
+      "already_configured_sensor": "Une liaison existe déjà pour ce capteur.",
+      "reconfigure_successful": "La liaison a été reconfigurée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options de Matter TRV Binding",
+        "data": {
+          "update_interval_minutes": "Intervalle de vérification (minutes)",
+          "auto_repair": "Réparer automatiquement les liaisons",
+          "repair_attempts": "Réparations échouées avant de signaler un problème"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_check": {
+        "name": "Dernière vérification"
+      },
+      "repairs": {
+        "name": "Réparations"
+      }
+    },
+    "button": {
+      "check_and_repair": {
+        "name": "Vérifier et réparer"
+      }
+    }
+  },
+  "issues": {
+    "device_missing": {
+      "title": "L'appareil Matter lié n'existe plus",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Supprimer cette liaison ?",
+            "description": "Cela supprime l'entrée de liaison {binding_name} et ses entités de Home Assistant. Les liaisons Matter présentes sur les appareils eux-mêmes ne sont pas modifiées.",
+            "data": {
+              "confirm": {"name": "Confirmer la suppression"}
+            }
+          }
+        }
+      }
+    },
+    "repair_failed": {
+      "title": "La réparation de la liaison échoue sans cesse",
+      "description": "La liaison de {device_name} n'a pas pu être réparée après {attempts} tentatives. Vérifiez l'appareil, le réseau Matter et le serveur Matter."
+    }
+  },
+  "services": {
+    "repair": {
+      "name": "Réparer les liaisons",
+      "description": "Lance immédiatement un cycle de vérification et de réparation pour l'appareil de liaison sélectionné."
+    }
+  }
+}
